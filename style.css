@@ -1,0 +1,536 @@
+/* ============================================================
+   style.css — หน้าตาเกม "100 วันรอดซอมบี้"
+   ขั้นที่ 1: โครงหน้าจอ + ธีมมืดพื้นฐาน (ตกแต่งพิกเซลเต็มรูปแบบในขั้นที่ 7)
+   ============================================================ */
+
+:root {
+  /* สีหลักของธีม */
+  --bg: #110f0d;
+  --panel: #1d1a16;
+  --panel-raised: #27221d;
+  --border: #3b3229;
+  --text: #e6dccb;
+  --text-soft: #cbbfab;
+  --muted: #9c907e;
+  --accent: #c86a2c;   /* ส้มสนิม */
+  --blood: #b5302b;    /* แดงเลือด */
+  --good: #a6d36b;
+  --bad: #f08a84;
+
+  /* สีหลอดค่าสถานะ */
+  --hp: #d64545;
+  --food: #e0913a;
+  --water: #3a8fd6;
+  --ammo: #d6c23a;
+  --fatigue: #9a7bd6;
+  --stress: #d65a9a;
+
+  --font: "Leelawadee UI", "Leelawadee", "Thonburi", "Noto Sans Thai", Tahoma, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ซ่อนด้วย attribute hidden ได้เสมอ แม้ class จะกำหนด display ไว้ */
+[hidden] { display: none !important; }
+
+html, body { margin: 0; }
+
+body {
+  min-height: 100vh;
+  overflow-x: clip; /* ตอนจอสั่นไม่ให้เกิดแถบเลื่อนแนวนอน (clip ไม่ทำให้แถบด้านบนแบบ sticky เสีย) */
+  background: var(--bg) radial-gradient(ellipse at 50% 0%, #2b2119 0%, var(--bg) 70%) fixed;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.65; /* ภาษาไทยมีสระบน-ล่าง ต้องเว้นบรรทัดเยอะหน่อย */
+}
+
+h1, h2, h3, h4, p { margin: 0; }
+h1, h2, h3, h4 { line-height: 1.3; }
+
+/* ---------- ปุ่ม ---------- */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 2px solid var(--border);
+  padding: 0.55em 1.4em;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.55);
+  transition: background 0.15s, transform 0.05s;
+}
+.btn:hover { background: #352d26; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.55); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn-primary { background: var(--accent); border-color: #e3874d; color: #1c0f07; }
+.btn-primary:hover { background: #d97a3c; }
+.btn-danger { background: var(--blood); border-color: #d9524c; color: #fff3ef; }
+.btn-danger:hover { background: #c83a34; }
+.btn-small { padding: 0.3em 0.9em; font-size: 0.9rem; }
+
+/* ---------- ตัวละครพิกเซล ---------- */
+.sprite {
+  display: block;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated; /* ขยายแล้วพิกเซลยังคม ไม่เบลอ */
+}
+/* ภาพตัวละครครึ่งตัว 32x32 ขยายเป็นจำนวนเท่าเพื่อให้พิกเซลเท่ากันทุกจุด */
+.sprite-large  { width: 160px; height: 160px; }
+.sprite-medium { width: 96px;  height: 96px; }
+
+.sprite-frame {
+  flex: none;
+  padding: 6px;
+  background: linear-gradient(180deg, #4d5566 0%, #2c313c 100%);
+  border: 2px solid #5f6778;
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.25), 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- ชิปแสดงผลดี/เสีย ---------- */
+.chip-list { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 0.85rem;
+  border: 1px solid;
+}
+.chip-good { color: var(--good); border-color: #4b6630; background: #1b2412; }
+.chip-bad { color: var(--bad); border-color: #7a302c; background: #2a1513; }
+.chip-neutral { color: var(--muted); border-color: var(--border); }
+
+/* ---------- หน้าแรก ---------- */
+.screen-title {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+
+/* ปุ่มเปิด/ปิดเพลง ลอยอยู่มุมขวาบนทุกหน้า (ปุ่มภาษาและแถบด้านบนเว้นที่ให้) */
+.sound-toggle {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 30;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--border);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+.sound-toggle:hover { background: var(--panel-raised); border-color: var(--accent); }
+.sound-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sound-toggle[aria-pressed="false"] { opacity: 0.65; }
+
+/* ปุ่มเลือกภาษา มุมขวาบนของหน้าแรก (ถัดจากปุ่มเพลง) */
+.language-switch {
+  position: absolute;
+  top: 10px;
+  right: 64px;
+  display: flex;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+.lang-btn {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 4px 14px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.lang-btn + .lang-btn { border-left: 2px solid var(--border); }
+.lang-btn:hover { color: var(--text); background: var(--panel-raised); }
+.lang-btn[aria-pressed="true"] { color: #1c0f07; background: var(--accent); }
+.lang-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.title-card { max-width: 560px; text-align: center; }
+.title-kicker { color: var(--muted); letter-spacing: 0.06em; font-size: 0.95rem; }
+.game-title {
+  margin: 0.2em 0 0.35em;
+  font-size: clamp(2.8rem, 10vw, 4.6rem);
+  line-height: 1.15;
+  color: #eadfc9;
+  text-shadow: 4px 4px 0 #000;
+}
+.game-title span { display: block; }
+.game-title-sub {
+  color: var(--blood);
+  text-shadow: 4px 4px 0 #000, 0 0 24px rgba(181, 48, 43, 0.45);
+}
+.title-story { color: var(--text-soft); margin-bottom: 28px; }
+.title-menu { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.title-menu .btn { min-width: 220px; font-size: 1.1rem; }
+.title-save-info { margin-top: 14px; min-height: 1.6em; color: var(--muted); font-size: 0.9rem; }
+.title-note { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
+
+/* ---------- หน้าเปิดตัวละคร ---------- */
+.screen-reveal { max-width: 920px; margin: 0 auto; padding: 28px 16px 40px; }
+.reveal-heading {
+  text-align: center;
+  color: var(--accent);
+  font-size: clamp(1.5rem, 4.5vw, 2.1rem);
+  margin-bottom: 16px;
+}
+.reveal-card {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  padding: 20px;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+}
+/* ปุ่มกลับหน้าหลัก มุมบนซ้ายของกรอบ */
+.reveal-card-top { display: flex; justify-content: flex-start; margin-bottom: 12px; }
+.reveal-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+.reveal-identity { flex: 1; min-width: 220px; display: grid; gap: 4px; }
+.reveal-name { font-size: 2.2rem; color: #f3e9d8; }
+.reveal-basic { color: var(--text-soft); font-size: 1.05rem; }
+.reveal-occupation { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
+.reveal-look { color: var(--muted); font-size: 0.92rem; }
+
+.reveal-sections { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+.info-block {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+}
+.info-block-wide { grid-column: 1 / -1; }
+.info-block h4 { font-size: 0.85rem; color: var(--muted); font-weight: 600; letter-spacing: 0.04em; }
+.effect-title { font-weight: 700; font-size: 1.05rem; }
+.effect-desc { color: var(--text-soft); font-size: 0.92rem; margin-bottom: 6px; }
+.trait-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.trait-card { padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); }
+
+.start-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px 12px;
+}
+.start-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border-left: 4px solid var(--stat-color, var(--border));
+}
+.start-stat-value { white-space: nowrap; }
+.start-stat-value b { font-size: 1.1rem; }
+
+.breakdown { margin-top: 10px; font-size: 0.9rem; color: var(--text-soft); }
+.breakdown summary { cursor: pointer; color: var(--accent); }
+.breakdown ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 2px; }
+
+.reveal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 22px; }
+.reveal-actions .btn { min-width: 180px; font-size: 1.05rem; }
+.reveal-note { text-align: center; margin-top: 10px; color: var(--muted); font-size: 0.85rem; }
+
+/* แอนิเมชันตอนสุ่มได้ตัวละคร */
+.pop-in { animation: pop-in 0.35s ease-out; }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- หน้าเล่นเกม ---------- */
+/* แถบด้านบน: วันที่ซ้าย / ปุ่มหน้าแรกขวา (สูงพอให้ปุ่มเพลงที่ลอยมุมขวาอยู่ในแถบพอดี) */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 62px;
+  padding: 8px 66px 8px 16px; /* เว้นขวาให้ปุ่มเพลง */
+  background: rgba(13, 11, 9, 0.95);
+  border-bottom: 2px solid var(--border);
+}
+.top-bar-day { font-weight: 700; color: var(--accent); white-space: nowrap; font-size: 1.05rem; }
+
+/* จอกว้าง: 3 แผงซ้ายเรียงลงมา แผงช่วงของวันกินความสูงทั้งคอลัมน์ขวา
+   แถวสุดท้าย 1fr รับพื้นที่ที่เหลือ แผงซ้ายจึงไม่ถูกยืดจนมีช่องว่างคั่น */
+.game-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) 1fr;
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    "stats     phase"
+    "bag       phase"
+    "character phase";
+  align-items: start;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.panel-stats { grid-area: stats; }
+.panel-bag { grid-area: bag; }
+.panel-character { grid-area: character; }
+.phase-panel { grid-area: phase; align-self: stretch; }
+.panel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+}
+.panel-title { font-size: 1.1rem; color: var(--accent); }
+.panel-subtitle { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
+
+/* หลอดค่าสถานะ */
+.stats-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.stat-head { display: flex; justify-content: space-between; font-size: 0.95rem; }
+.stat-value { font-variant-numeric: tabular-nums; }
+.stat-bar { height: 12px; background: #0b0a08; border: 2px solid var(--border); }
+.stat-fill { height: 100%; background: var(--stat-color); transition: width 0.4s ease; }
+.stat.is-critical .stat-value { color: var(--bad); font-weight: 700; }
+.stat.is-critical .stat-bar { border-color: #8f2f2a; animation: critical-blink 1s steps(2) infinite; }
+@keyframes critical-blink { 50% { border-color: var(--bad); } }
+
+.stat-hp      { --stat-color: var(--hp); }
+.stat-food    { --stat-color: var(--food); }
+.stat-water   { --stat-color: var(--water); }
+.stat-ammo    { --stat-color: var(--ammo); }
+.stat-fatigue { --stat-color: var(--fatigue); }
+.stat-stress  { --stat-color: var(--stress); }
+
+/* แผงตัวละคร */
+.character-card { display: flex; align-items: center; gap: 12px; }
+.character-card p { font-size: 0.92rem; }
+.character-card .character-name { font-size: 1.1rem; font-weight: 700; }
+.character-job { color: var(--text-soft); }
+.trait-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.trait-tag { padding: 2px 10px; background: var(--panel-raised); border: 1px solid var(--border); font-weight: 600; cursor: help; }
+
+/* ช่วงของวัน */
+.phase-panel { min-height: 320px; }
+/* ภาพประกอบช่วงของวัน (ภาพพิกเซล 240x90 ขยายเต็มความกว้าง) */
+.scene-frame { position: relative; overflow: hidden; border: 2px solid var(--border); background: #0b0a08; line-height: 0; }
+/* ป้ายสภาพอากาศมุมซ้ายบนของภาพ */
+.scene-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-soft);
+  background: rgba(10, 9, 8, 0.72);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+/* ภาพเปลี่ยนตามสภาพตัวละคร (เกณฑ์อยู่ใน CONFIG.sceneMood) */
+.scene-frame::before,
+.scene-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+/* พลังชีวิตต่ำ: ขอบภาพแดงเต้นตุบ ๆ */
+.scene-frame::before { box-shadow: inset 0 0 48px 14px rgba(190, 20, 20, 0.75); }
+.scene-frame.mood-hurt::before { opacity: 1; animation: hurt-pulse 1.6s ease-in-out infinite; }
+@keyframes hurt-pulse { 50% { opacity: 0.45; } }
+/* เหนื่อยมาก: ขอบบนล่างมืดลงเหมือนตาจะปิด */
+.scene-frame::after {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0) 32%, rgba(0, 0, 0, 0) 68%, rgba(0, 0, 0, 0.92) 100%);
+}
+.scene-frame.mood-exhausted::after { opacity: 1; animation: eyelids 5s ease-in-out infinite; }
+@keyframes eyelids { 45%, 55% { opacity: 0.6; } }
+/* เครียดมาก: สีหม่น ภาพสั่นเป็นระยะ */
+.scene-frame.mood-stressed .scene-canvas,
+.scene-frame.mood-stressed .scene-image {
+  filter: saturate(0.3) contrast(1.15) sepia(0.2);
+  animation: stress-shake 3.5s steps(1) infinite;
+}
+@keyframes stress-shake {
+  0%, 88%, 100% { transform: none; }
+  90% { transform: translate(1px, 0); }
+  93% { transform: translate(-1px, 1px); }
+  96% { transform: translate(1px, -1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-frame::before,
+  .scene-frame::after,
+  .scene-frame .scene-canvas,
+  .scene-frame .scene-image { animation: none !important; }
+}
+.scene-canvas,
+.scene-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 160 / 60;
+  object-fit: cover;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+.phase-body { display: grid; gap: 10px; }
+.dev-note { color: var(--muted); font-size: 0.88rem; border: 1px dashed var(--border); padding: 8px 12px; }
+.bag-note { color: var(--muted); font-size: 0.8rem; }
+/* เลื่อนกลับมาที่หัวข้อแล้วไม่ให้ถูกแถบด้านบนบัง */
+#phase-title { scroll-margin-top: 90px; }
+
+/* ---------- กลางคืน ---------- */
+.night-threat { display: grid; gap: 4px; padding: 10px 12px; background: #120f17; border: 1px solid #3a3050; border-left: 4px solid #7a5ad0; }
+.night-threat-name { font-weight: 700; font-size: 1.05rem; }
+.night-threat-desc { color: var(--text-soft); font-size: 0.9rem; }
+.night-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.92rem; }
+.night-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+.night-expect { font-weight: 700; color: var(--good); }
+.night-expect.is-danger { color: var(--bad); }
+
+/* ---------- สรุปวัน / เสียชีวิต ---------- */
+.night-report { margin: 0; padding: 10px 12px 10px 28px; display: grid; gap: 4px; background: #110e0c; border: 1px solid var(--border); border-left: 4px solid var(--accent); }
+.death-box { display: grid; gap: 6px; padding: 14px 16px; background: #1d0d0d; border: 2px solid var(--bad); }
+.death-box.is-win { background: #0f1a10; border-color: var(--good); }
+.death-message { font-size: 1.15rem; font-weight: 700; }
+.death-cause { color: var(--text-soft); }
+
+/* ---------- ซอมบี้ทำร้าย: จอกะพริบแดง + สั่น ---------- */
+.hit-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, rgba(160, 0, 0, 0.15) 0%, rgba(200, 10, 10, 0.55) 100%);
+}
+.hit-flash.is-hit { animation: hit-flash 0.7s ease-out; }
+@keyframes hit-flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+.screen-game.is-hit { animation: hit-shake 0.45s; }
+@keyframes hit-shake {
+  0%, 100% { transform: none; }
+  15% { transform: translate(-6px, 2px); }
+  35% { transform: translate(6px, -2px); }
+  55% { transform: translate(-4px, 1px); }
+  75% { transform: translate(3px, -1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .screen-game.is-hit { animation: none; } /* ไม่สั่น เหลือแค่กะพริบแดง */
+}
+
+/* ข้อความเปิดเรื่องวันที่ 1 (อยู่ใต้การ์ดของ) */
+.intro-note { display: grid; gap: 6px; padding: 4px 12px; color: var(--text-soft); font-size: 0.9rem; border-left: 3px solid var(--border); }
+
+/* ---------- ของ: สีตามความหายาก ---------- */
+.rarity-common { --rarity: #8d8577; }
+.rarity-rare   { --rarity: #4f9ad8; }
+.rarity-epic   { --rarity: #c07ae0; }
+.rarity-label { color: var(--rarity); font-weight: 700; }
+.chip-risk { color: #f3c470; border-color: #7a5a24; background: #2a2010; }
+.item-icon { font-size: 1.5rem; line-height: 1; width: 1.6em; text-align: center; flex: none; }
+img.item-icon { width: 32px; height: 32px; image-rendering: pixelated; }
+
+/* การ์ดของที่เจอตอนเช้า */
+.item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.item-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 10px 12px;
+  background: var(--panel-raised);
+  border: 2px solid var(--border);
+  border-top: 4px solid var(--rarity);
+}
+.item-card.is-taken { opacity: 0.55; }
+.item-card .btn { justify-self: start; }
+.item-card-head { display: flex; align-items: center; gap: 8px; }
+.item-name { font-weight: 700; }
+.item-meta { font-size: 0.8rem; color: var(--muted); }
+.item-desc { font-size: 0.88rem; color: var(--text-soft); }
+.btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+.pick-status { color: var(--muted); font-size: 0.9rem; }
+.phase-actions { display: flex; justify-content: flex-end; }
+.day-log { margin: 0; padding: 8px 12px 8px 28px; background: #0f0d0b; border: 1px solid var(--border); font-size: 0.88rem; color: var(--text-soft); display: grid; gap: 2px; }
+
+/* กระเป๋า */
+.bag-count { color: var(--muted); font-size: 0.85rem; font-weight: 400; }
+.bag-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.bag-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--rarity, var(--border));
+}
+/* ชื่อของกว้างอย่างน้อย 8em ถ้าที่ไม่พอ ปุ่มจะลงไปแถวล่าง (ชิดขวา) แทนการบีบชื่อ */
+.bag-item { flex-wrap: wrap; }
+.bag-item-name { flex: 1 1 8em; min-width: 0; font-size: 0.9rem; }
+.bag-item-actions { display: flex; gap: 6px; margin-left: auto; }
+.bag-item-name small { color: var(--muted); }
+/* ส่วนใส่กระเป๋า: กล่องแยกเหนือรายการของ (เป้ไม่กินช่องในกระเป๋า) */
+.worn-slot { display: grid; gap: 4px; padding: 6px 8px; background: #14110e; border: 1px dashed var(--border); }
+.worn-label { font-size: 0.78rem; font-weight: 700; color: var(--muted); letter-spacing: 0.03em; }
+.worn-empty { font-size: 0.85rem; color: var(--muted); }
+.worn-item { border-style: solid; }
+/* ช่องว่างในกระเป๋า: สี่เหลี่ยมเล็กเรียงแถวเดียว */
+.bag-empty-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0; }
+.bag-empty-slot { width: 18px; height: 18px; border: 1px dashed var(--border); background: rgba(255, 255, 255, 0.02); }
+.swap-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* ---------- กล่องยืนยัน ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.7);
+}
+.modal-box {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  background: var(--panel);
+  border: 2px solid var(--blood);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.6);
+}
+.modal-box h2 { color: var(--bad); font-size: 1.3rem; }
+.modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+
+/* ---------- จอเล็ก (มือถือ) ---------- */
+@media (max-width: 760px) {
+  /* จอเล็ก: เห็นค่าสถานะแล้วต่อด้วยช่วงของวันทันที ไม่ต้องเลื่อนผ่านกระเป๋า/ตัวละคร */
+  .game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-template-areas: "stats" "phase" "bag" "character";
+  }
+}
+@media (max-width: 640px) {
+  .reveal-sections,
+  .trait-list { grid-template-columns: 1fr; }
+  .reveal-hero { justify-content: center; text-align: center; }
+  .top-bar { gap: 10px; padding: 8px 62px 8px 12px; }
+  .top-bar-day { font-size: 0.95rem; }
+  .top-bar .btn-small { padding: 0.3em 0.6em; }
+}

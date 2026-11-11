@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>100 วันรอดซอมบี้</title>
+  <!-- ไอคอนแท็บแบบฝังในหน้า (กันเบราว์เซอร์ขอ favicon.ico แล้วขึ้น 404) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%9F%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ข้อความที่มี data-i18n จะถูกเปลี่ยนตามภาษาที่เลือก (ข้อความอยู่ใน lang.js) -->
+
+  <!-- ปุ่มเปิด/ปิดเพลง มุมขวาบน (แสดงทุกหน้า) ไอคอนและข้อความตั้งใน game.js -->
+  <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">🔊</button>
+
+  <!-- ===== หน้าแรก ===== -->
+  <section id="screen-title" class="screen screen-title">
+    <!-- ปุ่มเลือกภาษา มุมขวาบน -->
+    <div id="language-switch" class="language-switch" role="group" aria-label="ภาษา">
+      <button class="lang-btn" type="button" data-language="th" aria-pressed="true">ไทย</button>
+      <button class="lang-btn" type="button" data-language="en" aria-pressed="false">EN</button>
+    </div>
+
+    <div class="title-card">
+      <p class="title-kicker" data-i18n="titleKicker">เมืองล่มสลาย · ไม่มีใครมาช่วยเร็ว ๆ นี้</p>
+      <h1 class="game-title">
+        <span data-i18n="titleLine1">100 วัน</span>
+        <span class="game-title-sub" data-i18n="titleLine2">รอดซอมบี้</span>
+      </h1>
+      <p class="title-story" data-i18n-html="titleStory">วิทยุฉุกเฉินประกาศว่าหน่วยกู้ภัยจะมาถึงในอีก 100 วัน<br>จนกว่าจะถึงวันนั้น... ห้ามตาย</p>
+      <div class="title-menu">
+        <button id="btn-continue" class="btn btn-primary" type="button" data-i18n="continueButton" hidden>▶ เล่นต่อ</button>
+        <button id="btn-new-game" class="btn btn-primary" type="button" data-i18n="newGameButton">เริ่มเกมใหม่</button>
+      </div>
+      <p id="title-save-info" class="title-save-info"></p>
+      <p class="title-note" data-i18n="titleNote">ทุกเกมใหม่ระบบจะสุ่มตัวละครให้ คุณเลือกเองไม่ได้ ต้องเอาชีวิตรอดด้วยสิ่งที่ได้มา</p>
+    </div>
+  </section>
+
+  <!-- ===== หน้า "คุณถูกสุ่มเกิดเป็น..." ===== -->
+  <section id="screen-reveal" class="screen screen-reveal" hidden>
+    <h2 class="reveal-heading" data-i18n="revealHeading">คุณถูกสุ่มเกิดเป็น...</h2>
+    <div id="reveal-card" class="reveal-card">
+      <!-- ปุ่มย้อนกลับหน้าหลัก มุมบนซ้ายของกรอบ -->
+      <div class="reveal-card-top">
+        <button id="btn-reveal-back" class="btn btn-small" type="button" data-i18n="backToTitleButton">← กลับหน้าหลัก</button>
+      </div>
+      <div class="reveal-hero">
+        <div class="sprite-frame"><canvas id="reveal-sprite" class="sprite sprite-large" role="img"></canvas></div>
+        <div class="reveal-identity">
+          <h3 id="reveal-name" class="reveal-name"></h3>
+          <p id="reveal-basic" class="reveal-basic"></p>
+          <p id="reveal-occupation" class="reveal-occupation"></p>
+          <p id="reveal-look" class="reveal-look"></p>
+        </div>
+      </div>
+      <div class="reveal-sections">
+        <section class="info-block">
+          <h4 data-i18n="ageGroupHeading">ช่วงอายุ</h4>
+          <div id="reveal-age"></div>
+        </section>
+        <section class="info-block">
+          <h4 data-i18n="jobHeading">อาชีพก่อนวันสิ้นโลก</h4>
+          <div id="reveal-job"></div>
+        </section>
+        <section class="info-block info-block-wide">
+          <h4 data-i18n="traitsHeading">นิสัย</h4>
+          <div id="reveal-traits" class="trait-list"></div>
+        </section>
+        <section class="info-block info-block-wide">
+          <h4 data-i18n="startStatsHeading">ค่าเริ่มต้น</h4>
+          <div id="reveal-stats"></div>
+        </section>
+      </div>
+    </div>
+    <div class="reveal-actions">
+      <button id="btn-reroll" class="btn" type="button" data-i18n="rerollButton">🎲 สุ่มใหม่</button>
+      <button id="btn-start-day" class="btn btn-primary" type="button" data-i18n="startDayButton">เริ่มวันที่ 1 ▶</button>
+    </div>
+    <p class="reveal-note" data-i18n="revealNote">เมื่อกดเริ่มวันที่ 1 ตัวละครจะถูกล็อก สุ่มใหม่ไม่ได้จนกว่าจะเริ่มเกมใหม่</p>
+  </section>
+
+  <!-- ===== หน้าเล่นเกม ===== -->
+  <section id="screen-game" class="screen screen-game" hidden>
+    <!-- แถบด้านบน: วันที่ + ปุ่มหน้าแรก (ชื่อ อายุ อาชีพ อยู่ในแผงตัวละคร) -->
+    <header class="top-bar">
+      <div id="topbar-day" class="top-bar-day"></div>
+      <button id="btn-home" class="btn btn-small" type="button" data-i18n="homeButton">หน้าแรก</button>
+    </header>
+
+    <!-- จอกว้าง: ค่าสถานะ/กระเป๋า/ตัวละครอยู่คอลัมน์ซ้าย ช่วงของวันอยู่ขวา
+         จอเล็ก: ค่าสถานะ → ช่วงของวัน → กระเป๋า → ตัวละคร (จัดใน style.css ด้วย grid-area) -->
+    <main class="game-layout">
+      <section class="panel panel-stats">
+        <h2 class="panel-title" data-i18n="statsHeading">ค่าสถานะ</h2>
+        <ul id="stats-list" class="stats-list"></ul>
+      </section>
+      <section class="panel panel-bag">
+        <h2 class="panel-title"><span data-i18n="bagHeading">กระเป๋า</span> <small id="bag-count" class="bag-count"></small></h2>
+        <!-- ส่วนใส่กระเป๋า: กระเป๋าเป้ที่ใส่อยู่ (ไม่กินช่องในกระเป๋า แต่เพิ่มจำนวนช่อง) -->
+        <div id="bag-worn" class="worn-slot"></div>
+        <ul id="bag-list" class="bag-list"></ul>
+        <p class="bag-note" data-i18n="bagNote">อาวุธ ของป้องกัน และหมวก ช่วยตอนกลางคืน · ของที่ใช้งานเป็นวันจะลด 1 ทุกสิ้นวัน</p>
+      </section>
+      <section class="panel panel-character">
+        <h2 class="panel-title" data-i18n="characterHeading">ตัวละคร</h2>
+        <div class="character-card">
+          <div class="sprite-frame"><canvas id="panel-sprite" class="sprite sprite-medium" role="img"></canvas></div>
+          <div>
+            <p id="panel-name" class="character-name"></p>
+            <p id="panel-identity"></p>
+            <p id="panel-job" class="character-job"></p>
+            <p id="panel-slots"></p>
+          </div>
+        </div>
+        <h3 class="panel-subtitle" data-i18n="traitsHeading">นิสัย</h3>
+        <div id="panel-traits" class="trait-tags"></div>
+        <h3 class="panel-subtitle" data-i18n="effectsHeading">ผลรวมของตัวละคร</h3>
+        <div id="panel-effects" class="chip-list"></div>
+      </section>
+
+      <section class="panel phase-panel">
+        <h2 id="phase-title" class="panel-title"></h2>
+        <!-- ภาพประกอบช่วงของวัน: ใช้รูปจริงถ้าตั้งไว้ใน CONFIG.sceneImages ไม่งั้นวาดภาพพิกเซลลง canvas -->
+        <!-- ภาพเปลี่ยนตาม: เช้า/กลางคืน, สภาพอากาศของวัน, ช่วงความยาก, สภาพตัวละคร (class mood-* ที่กรอบ) -->
+        <div class="scene-frame">
+          <img id="phase-scene-image" class="scene-image" alt="" hidden>
+          <canvas id="phase-scene" class="scene-canvas" role="img"></canvas>
+          <span id="scene-weather" class="scene-badge"></span>
+        </div>
+        <div id="phase-body" class="phase-body"></div>
+      </section>
+    </main>
+  </section>
+
+  <!-- แสงแดงกะพริบทั้งจอตอนเสียพลังชีวิต (เล่นด้วย class is-hit ใน game.js) -->
+  <div id="hit-flash" class="hit-flash" aria-hidden="true"></div>
+
+  <!-- ===== กล่องยืนยัน ===== -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title"></h2>
+      <p id="modal-message"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn" type="button" data-i18n="cancelButton">ยกเลิก</button>
+        <button id="modal-confirm" class="btn btn-danger" type="button"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ลำดับสำคัญ: config → names → lang → items → sprites → audio → game -->
+  <script src="config.js"></script>
+  <script src="names.js"></script>
+  <script src="lang.js"></script>
+  <script src="items.js"></script>
+  <script src="sprites.js"></script>
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
