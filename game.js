@@ -375,7 +375,9 @@ function findBadStartingStats(character) {
 
 // ------------------------------------------------------------
 // 6) บันทึก/โหลดด้วย localStorage
-//    zombie100.run = เกมที่กำลังเล่น (ขั้นนี้เก็บตัวละคร ความคืบหน้ารายวันจะเพิ่มในขั้นที่ 6)
+//    zombie100.run  = เกมที่กำลังเล่น (ขั้นนี้เก็บตัวละคร ความคืบหน้ารายวันจะเพิ่มในขั้นที่ 6)
+//                     ตายหรือรอดครบแล้วลบทิ้ง = จบถาวร ต้องสุ่มตัวละครใหม่
+//    zombie100.best = สถิติดีที่สุดข้ามเกม
 // ------------------------------------------------------------
 const STORAGE_KEY_RUN = 'zombie100.run';
 const SAVE_VERSION = 1;
@@ -427,6 +429,47 @@ function clearRun() {
   } catch (error) {
     console.warn('[เซฟ] ลบเซฟไม่ได้', error);
   }
+}
+
+// สถิติดีที่สุด (เก็บข้ามเกม) คีย์ zombie100.best:
+//   { version, bestDay: วันที่ไปได้ไกลสุด, wins: จำนวนครั้งที่รอดครบ, runs: จำนวนเกมที่เล่นจบ (ตายหรือรอด) }
+const STORAGE_KEY_BEST = 'zombie100.best';
+const BEST_VERSION = 1;
+
+function createEmptyBest() {
+  return { version: BEST_VERSION, bestDay: 0, wins: 0, runs: 0 };
+}
+
+// โหลดสถิติดีที่สุด ถ้าไม่มีหรือข้อมูลเสียจะได้ค่าว่าง (ยังไม่เคยเล่นจบ)
+function loadBest() {
+  try {
+    const best = JSON.parse(localStorage.getItem(STORAGE_KEY_BEST));
+    const isCount = value => Number.isInteger(value) && value >= 0;
+    if (best?.version === BEST_VERSION && isCount(best.bestDay) && isCount(best.wins) && isCount(best.runs)) {
+      return { ...best, bestDay: Math.min(best.bestDay, CONFIG.totalDays) };
+    }
+  } catch (error) {
+    console.warn('[สถิติ] อ่านสถิติดีที่สุดไม่ได้', error);
+  }
+  return createEmptyBest();
+}
+
+function saveBest(best) {
+  try {
+    localStorage.setItem(STORAGE_KEY_BEST, JSON.stringify(best));
+  } catch (error) {
+    console.warn('[สถิติ] บันทึกสถิติดีที่สุดไม่ได้', error);
+  }
+}
+
+// รวมผลเกมที่เพิ่งจบเข้ากับสถิติเดิม (ไม่แก้ของเดิม คืนสถิติใหม่)
+function mergeBest(best, dayReached, won) {
+  return {
+    version: BEST_VERSION,
+    bestDay: Math.max(best.bestDay, dayReached),
+    wins: best.wins + (won ? 1 : 0),
+    runs: best.runs + 1,
+  };
 }
 
 // เซฟใช้ได้ไหม (กันกรณีแก้ config แล้ว id ที่อยู่ในเซฟหายไป)
@@ -1010,7 +1053,7 @@ function renderScene(phase, day, runSeed) {
   const imagePath = CONFIG.sceneImages[phase];
   const weather = getWeather(day, runSeed);
   const label = `${t(SCENE_LABEL_KEYS[phase])} (${tr(weather, 'name')})`;
-  byId('scene-weather').textContent = `${weather.icon} ${tr(weather, 'name')}`;
+  byId('scene-weather').innerHTML = iconLabel(weather.icon, tr(weather, 'name'));
   for (const [className, active] of Object.entries(getSceneMoodClasses())) {
     canvas.parentElement.classList.toggle(className, active);
   }
@@ -1034,7 +1077,7 @@ function byId(id) {
   return document.getElementById(id);
 }
 
-// สลับหน้าจอ: title / reveal / game
+// สลับหน้าจอ: title / reveal / game / end
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(screen => {
     screen.hidden = screen.id !== `screen-${name}`;
@@ -1046,8 +1089,11 @@ function showScreen(name) {
 function applyStaticTexts() {
   document.documentElement.lang = currentLanguage;
   document.title = t('pageTitle');
+  // data-icon = ไอคอนพิกเซลหน้าข้อความ (เช่น ปุ่มสุ่มใหม่)
   document.querySelectorAll('[data-i18n]').forEach(element => {
-    element.textContent = t(element.dataset.i18n);
+    const text = t(element.dataset.i18n);
+    if (element.dataset.icon) element.innerHTML = iconLabel(element.dataset.icon, text);
+    else element.textContent = text;
   });
   // ข้อความที่มี <br> (มาจาก lang.js เท่านั้น ไม่ใช่ข้อมูลจากผู้เล่น)
   document.querySelectorAll('[data-i18n-html]').forEach(element => {
@@ -1063,6 +1109,67 @@ function applyStaticTexts() {
 function escapeHtml(text) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return String(text).replace(/[&<>"']/g, ch => map[ch]);
+}
+
+// ------------------------------------------------------------
+// ไอคอนพิกเซล (แผนที่พิกเซลอยู่ใน icons.js): แปลงเป็นภาพ SVG ครั้งเดียวแล้วจำไว้
+// ------------------------------------------------------------
+const iconUrlCache = new Map();
+
+// ชั้นของไอคอน: ไอคอนชั้นเดียว = รายการแถว / หลายชั้น = รายการของชั้น
+function getIconLayers(id) {
+  const icon = PIXEL_ICONS[id];
+  return typeof icon[0] === 'string' ? [icon] : icon;
+}
+
+// รวมทุกชั้นเป็นตาราง 16x16 ของสี (null = โปร่งใส)
+function buildIconGrid(id) {
+  const grid = Array.from({ length: ICON_SIZE }, () => Array(ICON_SIZE).fill(null));
+  getIconLayers(id).forEach(rows => rows.forEach((row, y) => {
+    [...row].forEach((ch, x) => {
+      if (ICON_COLORS[ch] && y < ICON_SIZE && x < ICON_SIZE) grid[y][x] = ICON_COLORS[ch];
+    });
+  }));
+  return grid;
+}
+
+// ภาพ SVG ของไอคอน (พิกเซลสีเดียวกันที่ติดกันในแถวรวมเป็นสี่เหลี่ยมเดียว ไฟล์จะได้เล็ก)
+function iconUrl(id) {
+  if (!iconUrlCache.has(id)) {
+    let rects = '';
+    buildIconGrid(id).forEach((row, y) => {
+      for (let x = 0; x < ICON_SIZE;) {
+        const color = row[x];
+        let end = x + 1;
+        while (end < ICON_SIZE && row[end] === color) end++;
+        if (color) rects += `<rect x="${x}" y="${y}" width="${end - x}" height="1" fill="${color}"/>`;
+        x = end;
+      }
+    });
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${ICON_SIZE} ${ICON_SIZE}" shape-rendering="crispEdges">${rects}</svg>`;
+    iconUrlCache.set(id, `data:image/svg+xml,${encodeURIComponent(svg)}`);
+  }
+  return iconUrlCache.get(id);
+}
+
+// แท็กรูปไอคอนสำหรับใส่ใน innerHTML: scale 1 = 16px, 2 = 32px, 3 = 48px (เท่าตัวพอดี พิกเซลจะคม)
+// ไอคอนเป็นแค่ภาพประกอบ ข้อความข้าง ๆ บอกความหมายอยู่แล้ว จึงซ่อนจากโปรแกรมอ่านหน้าจอ
+function iconHtml(id, scale = 1, extraClass = '') {
+  if (!PIXEL_ICONS[id]) return ''; // ไม่มีไอคอนนี้ (validateConfig เตือนใน Console แล้ว)
+  const classes = ['px-icon', scale > 1 ? `px-icon-${scale}x` : '', extraClass].filter(Boolean).join(' ');
+  return `<img class="${classes}" src="${iconUrl(id)}" alt="" aria-hidden="true" draggable="false">`;
+}
+
+// ข้อความที่มีไอคอนอยู่กลางประโยค: ส่ง ICON_SLOT แทนตำแหน่งไอคอนเข้าไปใน t(...) แล้วแทนด้วยรูปหลัง escape
+//   เช่น withIcon(t('nightThreat', ICON_SLOT, name), 'zombie') → "คืนนี้: [รูป] ซอมบี้เร่ร่อน"
+const ICON_SLOT = '\u0001';
+function withIcon(text, iconId, scale = 1) {
+  return escapeHtml(text).replace(ICON_SLOT, iconHtml(iconId, scale));
+}
+
+// ไอคอน + ข้อความ (escape ข้อความให้แล้ว)
+function iconLabel(iconId, text, scale = 1) {
+  return `${iconHtml(iconId, scale)} ${escapeHtml(text)}`;
 }
 
 // ตัวเลขพร้อมเครื่องหมาย เช่น +5, −10
@@ -1083,24 +1190,28 @@ function renderModChips(mods) {
   entries.sort(([keyA, valueA], [keyB, valueB]) => Number(isBadMod(keyA, valueA)) - Number(isBadMod(keyB, valueB)));
   return entries.map(([key, value]) => {
     const bad = isBadMod(key, value);
-    return `<span class="chip ${bad ? 'chip-bad' : 'chip-good'}">${bad ? '✘' : '✔'} ${escapeHtml(formatMod(key, value))}</span>`;
+    return `<span class="chip ${bad ? 'chip-bad' : 'chip-good'}">${iconLabel(bad ? 'cross' : 'check', formatMod(key, value))}</span>`;
   }).join('');
 }
 
 // กล่องผลของแหล่งหนึ่ง (ช่วงอายุ / อาชีพ / นิสัย)
-function renderEffectBlock(title, desc, mods) {
+// icon = ชื่อไอคอนพิกเซลหน้าหัวข้อ (ไม่ใส่ก็ได้)
+function renderEffectBlock(title, desc, mods, icon = null) {
   return `
-    <p class="effect-title">${escapeHtml(title)}</p>
+    <p class="effect-title">${icon ? iconLabel(icon, title) : escapeHtml(title)}</p>
     <p class="effect-desc">${escapeHtml(desc)}</p>
     <div class="chip-list">${renderModChips(mods)}</div>`;
 }
 
-// หน้าแรก: ถ้ามีเซฟจะโชว์ปุ่ม "เล่นต่อ"
+// หน้าแรก: ถ้ามีเซฟจะโชว์ปุ่ม "เล่นต่อ" / เคยเล่นจบแล้วโชว์สถิติดีที่สุด
 function renderTitle() {
   const savedRun = loadRun();
   byId('btn-continue').hidden = !savedRun;
   byId('btn-new-game').classList.toggle('btn-primary', !savedRun);
   byId('title-save-info').textContent = savedRun ? t('lastSave', describeCharacter(savedRun.character)) : '';
+  const best = loadBest();
+  byId('title-best').hidden = best.runs === 0;
+  byId('title-best').innerHTML = iconLabel('trophy', t('bestLine', best.bestDay, best.wins, best.runs));
 }
 
 // หน้า "คุณถูกสุ่มเกิดเป็น..."
@@ -1112,16 +1223,16 @@ function renderReveal(character) {
   drawCharacter(byId('reveal-sprite'), character);
   byId('reveal-name').textContent = getDisplayName(character);
   byId('reveal-basic').textContent = t('genderAge', tr(CONFIG.genders[character.gender], 'name'), character.age);
-  byId('reveal-occupation').textContent = `${occupation.icon} ${t('formerJob', occupationName)}`;
+  byId('reveal-occupation').innerHTML = iconLabel(occupation.icon, t('formerJob', occupationName));
   byId('reveal-look').textContent = describeLook(character.look).join(' · ');
 
   byId('reveal-age').innerHTML = renderEffectBlock(
     t('ageRange', tr(ageGroup, 'name'), ageGroup.minAge, ageGroup.maxAge), tr(ageGroup, 'desc'), ageGroup.mods);
   byId('reveal-job').innerHTML = renderEffectBlock(
-    `${occupation.icon} ${occupationName}`, tr(occupation, 'desc'), occupation.mods);
+    occupationName, tr(occupation, 'desc'), occupation.mods, occupation.icon);
   byId('reveal-traits').innerHTML = character.traitIds
     .map(id => getTrait(id))
-    .map(trait => `<article class="trait-card">${renderEffectBlock(`${trait.icon} ${tr(trait, 'name')}`, tr(trait, 'desc'), trait.mods)}</article>`)
+    .map(trait => `<article class="trait-card">${renderEffectBlock(tr(trait, 'name'), tr(trait, 'desc'), trait.mods, trait.icon)}</article>`)
     .join('');
   byId('reveal-stats').innerHTML = renderStartingStats(character);
 
@@ -1133,12 +1244,12 @@ function renderStartingStats(character) {
   const stats = calcStartingStats(character);
   const items = Object.entries(CONFIG.stats).map(([key, def]) => `
     <li class="start-stat stat-${key}">
-      <span class="start-stat-name">${def.icon} ${escapeHtml(tr(def, 'name'))}</span>
+      <span class="start-stat-name">${iconLabel(def.icon, tr(def, 'name'))}</span>
       <span class="start-stat-value"><b>${stats[key]}</b> / ${getStatMax(key, stats)}</span>
     </li>`);
   items.push(`
     <li class="start-stat">
-      <span class="start-stat-name">🎒 ${escapeHtml(t('slotsLabel'))}</span>
+      <span class="start-stat-name">${iconLabel('backpack', t('slotsLabel'))}</span>
       <span class="start-stat-value"><b>${calcInventorySlots(character)}</b> ${escapeHtml(t('slotsUnit'))}</span>
     </li>`);
   const breakdown = getStartBreakdown(character).map(line => `<li>${formatBreakdownLine(line)}</li>`).join('');
@@ -1206,7 +1317,7 @@ function renderStats() {
     return `
       <li class="stat stat-${key}${critical ? ' is-critical' : ''}" data-stat="${key}">
         <div class="stat-head">
-          <span class="stat-name">${def.icon} ${name}</span>
+          <span class="stat-name">${iconHtml(def.icon)} ${name}</span>
           <span class="stat-value">${value} / ${max}</span>
         </div>
         <div class="stat-bar" role="progressbar" aria-label="${name}"
@@ -1228,32 +1339,38 @@ function isStatCritical(key, value) {
 function renderCharacterPanel() {
   const { character } = game;
   const occupation = getOccupation(character.occupationId);
-  const jobLabel = `${occupation.icon} ${t('formerJob', getOccupationName(occupation, character.gender))}`;
+  const jobLabel = `${ICON_SLOT} ${t('formerJob', getOccupationName(occupation, character.gender))}`;
   drawCharacter(byId('panel-sprite'), character);
   byId('panel-name').textContent = getDisplayName(character);
   byId('panel-identity').textContent =
     `${tr(CONFIG.genders[character.gender], 'name')} · ${tr(getAgeGroup(character.age), 'name')}`;
-  byId('panel-job').textContent = t('characterAgeJob', character.age, jobLabel);
-  byId('panel-traits').innerHTML = character.traitIds
-    .map(id => getTrait(id))
-    .map(trait => `<span class="trait-tag" title="${escapeHtml(tr(trait, 'desc'))}">${trait.icon} ${escapeHtml(tr(trait, 'name'))}</span>`)
-    .join('');
-  byId('panel-slots').textContent = t('slotsCount', game.inventorySlots);
+  byId('panel-job').innerHTML = withIcon(t('characterAgeJob', character.age, jobLabel), occupation.icon);
+  byId('panel-traits').innerHTML = renderTraitTags(character);
+  byId('panel-slots').innerHTML = iconLabel('backpack', t('slotsCount', game.inventorySlots));
   byId('panel-effects').innerHTML = renderModChips(getCharacterMods(character));
 }
 
+// ป้ายนิสัย (ไอคอน + ชื่อ, ชี้เมาส์ดูคำอธิบาย) ใช้ในแผงตัวละครและหน้าสรุป
+function renderTraitTags(character) {
+  return character.traitIds
+    .map(id => getTrait(id))
+    .map(trait => `<span class="trait-tag" title="${escapeHtml(tr(trait, 'desc'))}">${iconLabel(trait.icon, tr(trait, 'name'))}</span>`)
+    .join('');
+}
+
 // ช่วงของวัน: เช้า (เก็บของ) → กลางคืน (เตรียมรับมือ) → สรุปวัน → เช้าวันใหม่ / เสียชีวิต / รอดครบ
+// icon = ไอคอนพิกเซลหน้าหัวข้อ
 const PHASE_VIEWS = {
-  morning: { title: day => t('morningTitle', day), scene: 'morning', body: renderMorningBody },
-  night:   { title: day => t('nightTitle', day),   scene: 'night',   body: renderNightBody },
-  summary: { title: day => t('summaryTitle', day), scene: 'night',   body: renderSummaryBody },
-  dead:    { title: () => t('deadTitle'),          scene: 'night',   body: renderDeadBody },
-  won:     { title: () => t('wonTitle'),           scene: 'morning', body: renderWonBody },
+  morning: { icon: 'sun',        title: day => t('morningTitle', day), scene: 'morning', body: renderMorningBody },
+  night:   { icon: 'moon',       title: day => t('nightTitle', day),   scene: 'night',   body: renderNightBody },
+  summary: { icon: 'sunrise',    title: day => t('summaryTitle', day), scene: 'night',   body: renderSummaryBody },
+  dead:    { icon: 'skull',      title: () => t('deadTitle'),          scene: 'night',   body: renderDeadBody },
+  won:     { icon: 'helicopter', title: () => t('wonTitle'),           scene: 'morning', body: renderWonBody },
 };
 
 function renderPhase() {
   const view = PHASE_VIEWS[game.phase];
-  byId('phase-title').textContent = view.title(game.day);
+  byId('phase-title').innerHTML = iconLabel(view.icon, view.title(game.day));
   // ตายตอนเช้า (เช่น ของเสี่ยง) ใช้ภาพตอนเช้า
   const scene = game.phase === 'dead' && game.death?.phase === 'morning' ? 'morning' : view.scene;
   renderScene(scene, game.day, game.seed);
@@ -1289,15 +1406,15 @@ function renderNightBody() {
   const threat = getThreat(game.night.threatId);
   const { weapons, defense } = plan;
   const damageMod = (plan.mods.zombieDamage ?? 0) + (plan.mods.nightDamage ?? 0);
-  const chip = (text, tone = 'neutral') => `<span class="chip chip-${tone}">${escapeHtml(text)}</span>`;
+  const chip = (icon, text, tone = 'neutral') => `<span class="chip chip-${tone}">${iconLabel(icon, text)}</span>`;
   const chips = [
-    chip(t('nightShelter', defense.shelter)),
-    defense.items > 0 ? chip(t('nightDefenseItems', defense.items), 'good') : '',
-    plan.mods.defensePower ? chip(t('nightDefenseBonus', formatSigned(plan.mods.defensePower)), plan.mods.defensePower > 0 ? 'good' : 'bad') : '',
-    weapons.power > 0 ? chip(t('nightWeapons', weapons.power), 'good') : chip(t('nightNoWeapons')),
-    plan.reduction > 0 ? chip(t('nightReduction', plan.reduction), 'good') : '',
-    damageMod ? chip(t('nightDamageMod', formatSigned(damageMod)), damageMod > 0 ? 'bad' : 'good') : '',
-    weapons.noise > 0 ? chip(t('nightNoise', weapons.noise * CONFIG.night.noiseAttack), 'bad') : '',
+    chip('house', t('nightShelter', defense.shelter)),
+    defense.items > 0 ? chip('bricks', t('nightDefenseItems', defense.items), 'good') : '',
+    plan.mods.defensePower ? chip('wrench', t('nightDefenseBonus', formatSigned(plan.mods.defensePower)), plan.mods.defensePower > 0 ? 'good' : 'bad') : '',
+    weapons.power > 0 ? chip('swords', t('nightWeapons', weapons.power), 'good') : chip('swords', t('nightNoWeapons')),
+    plan.reduction > 0 ? chip('motorcycle_helmet', t('nightReduction', plan.reduction), 'good') : '',
+    damageMod ? chip('blood', t('nightDamageMod', formatSigned(damageMod)), damageMod > 0 ? 'bad' : 'good') : '',
+    weapons.noise > 0 ? chip('speaker', t('nightNoise', weapons.noise * CONFIG.night.noiseAttack), 'bad') : '',
   ].join('');
   // ปืน: เลือกได้ว่าจะยิงคืนนี้ไหม (ประหยัดกระสุนได้ แต่พลังโจมตีลดลง)
   const allGuns = planWeapons(game.inventory, game.stats.ammo, true, plan.mods);
@@ -1310,7 +1427,7 @@ function renderNightBody() {
   const [minDamage, maxDamage] = plan.damageRange;
   return `
     <div class="night-threat">
-      <p class="night-threat-name">${escapeHtml(t('nightThreat', threat.icon, tr(threat, 'name')))}</p>
+      <p class="night-threat-name">${withIcon(t('nightThreat', ICON_SLOT, tr(threat, 'name')), threat.icon, 2)}</p>
       <p class="night-threat-desc">${escapeHtml(tr(threat, 'desc'))}</p>
       <p>${escapeHtml(t('nightAttackRange', ...plan.attackRange))}</p>
     </div>
@@ -1333,7 +1450,7 @@ function renderReport() {
   return `<ul class="night-report">${game.report.map(entry => `<li>${escapeHtml(formatLogEntry(entry))}</li>`).join('')}</ul>`;
 }
 
-// เสียชีวิต: บอกวันและสาเหตุ (หน้าจอสรุปเต็มอยู่ในขั้นที่ 4)
+// เสียชีวิต: บอกวันและสาเหตุ + รายงานคืนสุดท้าย แล้วกดไปหน้าสรุปเต็มจอ
 function renderDeadBody() {
   const { death, character } = game;
   return `
@@ -1342,17 +1459,117 @@ function renderDeadBody() {
       <p class="death-cause">${escapeHtml(t('deadCause', describeCause(death.cause)))}</p>
     </div>
     ${renderReport()}
-    <p class="dev-note">${escapeHtml(t('deadNote'))}</p>
-    ${phaseButton('new-game', t('newGameButton'))}`;
+    ${phaseButton('show-end', t('endSummaryButton'))}`;
 }
 
-// รอดครบทุกวัน (หน้าจอชนะเต็มอยู่ในขั้นที่ 4)
+// รอดครบทุกวัน (ปกติไปหน้าสรุปเต็มจอทันที แผงนี้ใช้กรณีกลับมาที่หน้าเล่นเกม)
 function renderWonBody() {
   return `
     <div class="death-box is-win"><p class="death-message">${escapeHtml(t('wonMessage', getDisplayName(game.character), CONFIG.totalDays))}</p></div>
     ${renderReport()}
-    <p class="dev-note">${escapeHtml(t('wonNote'))}</p>
-    ${phaseButton('new-game', t('newGameButton'))}`;
+    ${phaseButton('show-end', t('endSummaryButton'))}`;
+}
+
+// ------------------------------------------------------------
+// 8.5) หน้าสรุปตอนจบเกม: ตัวละคร ไปได้กี่วัน สาเหตุ ข้อความปิดท้าย สถิติเกมนี้ และสถิติดีที่สุด
+// ------------------------------------------------------------
+
+// ข้อความปิดท้าย: รอดครบใช้ won / ตายใช้ช่วงที่ fromDay มากที่สุดที่ไม่เกินวันที่ตาย
+function getEnding(won, day) {
+  const { died, won: wonEnding } = CONFIG.endings;
+  if (won) return wonEnding;
+  return [...died].reverse().find(ending => day >= ending.fromDay) ?? died[0];
+}
+
+function showEndScreen() {
+  if (!game?.result) return;
+  renderEnd();
+  showScreen('end');
+  replayAnimation(byId('end-card'));
+}
+
+function renderEnd() {
+  const { character, result } = game;
+  const occupation = getOccupation(character.occupationId);
+  const total = CONFIG.totalDays;
+  const card = byId('end-card');
+  card.classList.toggle('is-won', result.won);
+  card.classList.toggle('is-dead', !result.won);
+
+  const title = byId('end-title');
+  title.innerHTML = result.won ? iconLabel('helicopter', t('wonTitle'), 3) : iconLabel('skull', t('deadTitle'), 3);
+  title.classList.toggle('is-won', result.won);
+  title.classList.toggle('is-dead', !result.won);
+  drawCharacter(byId('end-sprite'), character);
+  byId('end-name').textContent = getDisplayName(character);
+  byId('end-basic').textContent = t('genderAge', tr(CONFIG.genders[character.gender], 'name'), character.age);
+  byId('end-occupation').innerHTML = iconLabel(occupation.icon, t('formerJob', getOccupationName(occupation, character.gender)));
+  byId('end-traits').innerHTML = renderTraitTags(character);
+
+  // ไปได้กี่วัน: หลอดเต็มเมื่อรอดครบ
+  const daysText = result.won ? t('endDaysWon', total) : t('endDaysDead', result.dayReached, total);
+  byId('end-days').textContent = daysText;
+  const bar = byId('end-bar');
+  bar.setAttribute('aria-valuemax', String(total));
+  bar.setAttribute('aria-valuenow', String(result.dayReached));
+  bar.setAttribute('aria-label', daysText);
+  byId('end-bar-fill').style.width = `${clamp(Math.round((result.dayReached / total) * 100), 0, 100)}%`;
+  byId('end-cause').hidden = result.won;
+  byId('end-cause').textContent = result.won ? '' : t('deadCause', describeCause(game.death.cause));
+
+  byId('end-epilogue').textContent = tr(getEnding(result.won, result.dayReached), 'desc');
+  byId('end-stats').innerHTML = renderEndStats();
+  byId('end-best').innerHTML = renderEndBest(result);
+}
+
+// สถิติเกมนี้ 3 หมวด: การต่อสู้ / ของ / ร่างกาย
+function renderEndStats() {
+  const { tally, stats } = game;
+  const row = (label, value) => `
+    <li class="end-stat"><span class="end-stat-label">${escapeHtml(label)}</span><b class="end-stat-value">${escapeHtml(String(value))}</b></li>`;
+  const group = (icon, title, rows, extra = '') => `
+    <section class="info-block end-group">
+      <h4>${iconLabel(icon, title)}</h4>
+      <ul class="end-stat-list">${rows.join('')}</ul>
+      ${extra}
+    </section>`;
+  const worst = tally.worstNight
+    ? t('statWorstValue', tally.worstNight.day, tr(getThreat(tally.worstNight.threatId), 'name'), tally.worstNight.damage)
+    : t('statWorstNone');
+  // ค่าสถานะตอนจบ เช่น [หัวใจ] 0  [อาหาร] 34  [น้ำ] 12 ...
+  const finalStats = Object.entries(CONFIG.stats).map(([key, def]) => `
+    <li class="end-final stat-${key}" title="${escapeHtml(tr(def, 'name'))}">${iconLabel(def.icon, stats[key])}</li>`).join('');
+
+  return [
+    group('swords', t('endCombatHeading'), [
+      row(t('statNights'), t('unitNights', tally.nightsSurvived)),
+      row(t('statAttack'), `${tally.attackTotal} / ${tally.blockedTotal}`),
+      row(t('statHpLost'), tally.hpLost),
+      row(t('statWorstNight'), worst),
+      row(t('statHordes'), t('unitTimes', tally.hordesSurvived)),
+      row(t('statBosses'), `${tally.bossesSurvived} / ${CONFIG.night.bossNights.length}`),
+    ]),
+    group('backpack', t('endItemsHeading'), [
+      row(t('statPicked'), t('unitPieces', tally.itemsPicked)),
+      row(t('statUsed'), t('unitTimes', tally.itemsUsed)),
+      row(t('statAmmoFired'), t('unitRounds', tally.ammoFired)),
+      row(t('statBroken'), t('unitPieces', tally.itemsBroken)),
+    ]),
+    group('body', t('endBodyHeading'), [
+      row(t('statFoodEmpty'), t('unitDays', tally.foodEmptyDays)),
+      row(t('statWaterEmpty'), t('unitDays', tally.waterEmptyDays)),
+      row(t('statMaxStress'), tally.maxStress),
+    ], `<p class="end-final-title">${escapeHtml(t('statFinal'))}</p><ul class="end-final-list">${finalStats}</ul>`),
+  ].join('');
+}
+
+// สถิติดีที่สุด (รวมเกมที่เพิ่งจบแล้ว) + ป้าย "สถิติใหม่!"
+function renderEndBest(result) {
+  const { best, isNewBest } = result;
+  return `
+    <span class="end-best-title">${iconLabel('trophy', t('endBestHeading'))}</span>
+    <span class="end-best-line">${escapeHtml(t('bestLine', best.bestDay, best.wins, best.runs))}</span>
+    ${isNewBest ? `<span class="end-new-best">${iconLabel('sparkle', t('endNewBest'))}</span>` : ''}`;
 }
 
 // เล่นแอนิเมชันซ้ำ (ให้รู้ว่าสุ่มใหม่แล้ว)
@@ -1489,6 +1706,8 @@ function changeStat(key, amount, cause, useBoost = true) {
   game.stats[key] = clamp(before + delta, 0, getStatMax(key, game.stats));
   const changed = game.stats[key] - before;
   if (key === 'hp' && changed < 0 && cause) game.lastDamageCause = cause;
+  if (key === 'hp' && changed < 0) game.tally.hpLost -= changed; // สถิติ: พลังชีวิตที่เสียไปทุกสาเหตุ
+  if (key === 'stress') game.tally.maxStress = Math.max(game.tally.maxStress, game.stats.stress);
   return changed;
 }
 
@@ -1557,6 +1776,7 @@ function useItem(index) {
     }
   }
   entry.usesLeft -= 1;
+  game.tally.itemsUsed += 1;
   if (entry.usesLeft <= 0) game.inventory.splice(index, 1);
   if (isDead()) markDead(); // ของเสี่ยงทำให้ตายได้ทุกช่วงของวัน
   renderGame();
@@ -1638,6 +1858,7 @@ function pickOfferItem(offerIndex) {
     }
     morning.taken.push(offerIndex);
     morning.picks += 1;
+    game.tally.itemsPicked += 1;
     renderGame();
   };
   if (hasRoomFor(itemId)) take();
@@ -1654,7 +1875,7 @@ function openSwapModal(newItemId, onTake) {
   const options = game.inventory.map((entry, index) => {
     const item = getItem(entry.id);
     const left = usesLeftText(item, entry);
-    return `<button class="btn btn-small" type="button" data-swap-index="${index}">${itemIconHtml(item)} ${escapeHtml(tr(item, 'name'))}${left ? ` <small>(${escapeHtml(left)})</small>` : ''}</button>`;
+    return `<button class="btn btn-small" type="button" data-swap-index="${index}">${itemIconHtml(item, 1)} ${escapeHtml(tr(item, 'name'))}${left ? ` <small>(${escapeHtml(left)})</small>` : ''}</button>`;
   }).join('');
   byId('modal-title').textContent = t('swapTitle');
   byId('modal-message').innerHTML = `${escapeHtml(t('swapMessage', tr(getItem(newItemId), 'name')))}${note}<span class="swap-list">${options}</span>`;
@@ -1803,8 +2024,12 @@ function resolveNight() {
     step();
   }
   game.report = report;
-  if (isDead()) markDead();
-  else game.phase = 'summary';
+  if (isDead()) {
+    markDead();
+  } else {
+    countSurvivedNight(game.night.threatId);
+    game.phase = 'summary';
+  }
   renderGame();
   if (lost > 0) playHitEffect();
   scrollPhaseIntoView();
@@ -1823,7 +2048,27 @@ function runZombieAttack(report) {
   const lost = damage > 0 ? -changeStat('hp', -damage, { kind: 'night', threatId: threat.id }) : 0;
   // บอกความเสียหายเต็ม ๆ ของการโจมตี (ตัวเลขจะตรงกับสูตร แม้พลังชีวิตจะเหลือน้อยกว่านั้น)
   report.unshift({ key: 'reportAttack', args: [{ threat: threat.id }, attack, plan.block, damage] });
+  countAttack(attack, plan.block, damage, plan.weapons.ammoUsed, threat.id);
   return lost;
+}
+
+// สถิติการบุกคืนนี้: แรงบุก ส่วนที่กันได้ กระสุนที่ยิง และคืนที่หนักที่สุด (ใช้ความเสียหายตามสูตร เหมือนในรายงาน)
+function countAttack(attack, block, damage, ammoUsed, threatId) {
+  const tally = game.tally;
+  tally.attackTotal += attack;
+  tally.blockedTotal += Math.min(attack, block);
+  tally.ammoFired += ammoUsed;
+  if (damage > 0 && damage > (tally.worstNight?.damage ?? 0)) {
+    tally.worstNight = { day: game.day, threatId, damage };
+  }
+}
+
+// รอดคืนนี้ครบทุกขั้น (ไม่ตายระหว่างบุก/สิ้นวัน) → นับคืนที่รอด และคลื่นใหญ่/บอสที่ผ่านมาได้
+function countSurvivedNight(threatId) {
+  const tally = game.tally;
+  tally.nightsSurvived += 1;
+  if (threatId === 'horde') tally.hordesSurvived += 1;
+  if (threatId === 'boss') tally.bossesSurvived += 1;
 }
 
 // เหนื่อยจนถึงขีด (เช่น ออกค้นของรอบสองหลายวันติด) → ร่างกายทรุด
@@ -1850,6 +2095,8 @@ function runDailyNeeds(report) {
   const food = changeStat('food', -drain.food);
   const water = changeStat('water', -drain.water);
   report.push({ key: 'reportNeeds', args: [[['food', food], ['water', water]]] });
+  if (game.stats.food === 0) game.tally.foodEmptyDays += 1;
+  if (game.stats.water === 0) game.tally.waterEmptyDays += 1;
   if (game.stats.food === 0) {
     report.push({ key: 'reportStarving', args: [-changeStat('hp', -settings.starveDamage, { kind: 'starve' })] });
   }
@@ -1890,6 +2137,7 @@ function runWear(report) {
     broken.push(item.id);
     return false;
   });
+  game.tally.itemsBroken += broken.length;
   if (broken.length > 0) report.push({ key: 'reportBroken', args: [{ items: broken }] });
 }
 
@@ -1897,9 +2145,22 @@ function runWear(report) {
 function markDead() {
   game.death = { day: game.day, phase: game.phase, cause: game.lastDamageCause ?? { kind: 'unknown' } };
   game.phase = 'dead';
+  finishRun(false);
 }
 
-// ข้อความสาเหตุการตาย (ขั้นที่ 4 จะใช้ในหน้าจอแพ้ด้วย)
+// จบเกมถาวร (ตายหรือรอดครบ): ลบเซฟ ("เล่นต่อ" จะหายไป) แล้วบันทึกสถิติดีที่สุด — ทำครั้งเดียวต่อเกม
+// game.result = { won, dayReached, isNewBest, best } ใช้วาดหน้าสรุป
+function finishRun(won) {
+  if (game.result) return;
+  const dayReached = won ? CONFIG.totalDays : game.death.day;
+  const before = loadBest();
+  const best = mergeBest(before, dayReached, won);
+  saveBest(best);
+  clearRun();
+  game.result = { won, dayReached, isNewBest: dayReached > before.bestDay, best };
+}
+
+// ข้อความสาเหตุการตาย (ใช้ทั้งแผงตอนตายและหน้าสรุป)
 function describeCause(cause) {
   switch (cause?.kind) {
     case 'night': {
@@ -1916,19 +2177,22 @@ function describeCause(cause) {
   }
 }
 
-// กด "เริ่มวันที่ N": ขึ้นวันใหม่ สุ่มของตอนเช้า (วันสุดท้ายผ่านไปแล้ว = รอดครบ)
+// กด "เริ่มวันที่ N": ขึ้นวันใหม่ สุ่มของตอนเช้า (วันสุดท้ายผ่านไปแล้ว = รอดครบ → หน้าสรุป)
 function startNextDay() {
   if (game.phase !== 'summary') return;
   if (game.day >= CONFIG.totalDays) {
     game.phase = 'won';
-  } else {
-    game.day += 1;
-    game.phase = 'morning';
-    game.morning = rollMorningOffer(game.day, game.character, game.inventory);
-    game.night = null;
-    game.report = null;
-    game.log = [];
+    finishRun(true);
+    renderGame();
+    showEndScreen();
+    return;
   }
+  game.day += 1;
+  game.phase = 'morning';
+  game.morning = rollMorningOffer(game.day, game.character, game.inventory);
+  game.night = null;
+  game.report = null;
+  game.log = [];
   renderGame();
   scrollPhaseIntoView();
 }
@@ -1955,11 +2219,11 @@ function isPlayable() {
   return ['morning', 'night', 'summary'].includes(game.phase);
 }
 
-// ไอคอนของ: อีโมจิไปก่อน ถ้าเปิด CONFIG.itemImages จะใช้รูป images/items/<id>.png
-function itemIconHtml(item) {
+// ไอคอนของ: ไอคอนพิกเซลใน icons.js (scale 2 = 32px) ถ้าเปิด CONFIG.itemImages จะใช้รูป images/items/<id>.png
+function itemIconHtml(item, scale = 2) {
   return CONFIG.itemImages
     ? `<img class="item-icon" src="images/items/${item.id}.png" alt="">`
-    : `<span class="item-icon" aria-hidden="true">${item.icon}</span>`;
+    : iconHtml(item.icon, scale, scale === 2 ? 'item-icon' : '');
 }
 
 function usesText(item) {
@@ -1969,7 +2233,7 @@ function usesText(item) {
 
 // ชิปบอกผลของของ: ผลตอนใช้ / ผลติดตัว / ความเสี่ยง
 function renderItemChips(item) {
-  const chip = (good, text) => `<span class="chip ${good ? 'chip-good' : 'chip-bad'}">${good ? '✔' : '✘'} ${escapeHtml(text)}</span>`;
+  const chip = (good, text) => `<span class="chip ${good ? 'chip-good' : 'chip-bad'}">${iconLabel(good ? 'check' : 'cross', text)}</span>`;
   const chips = Object.entries(item.use ?? {}).map(([key, value]) => {
     const def = CONFIG.stats[key];
     return chip(def.higherIsWorse ? value < 0 : value > 0, `${tr(def, 'name')} ${formatSigned(value)}`);
@@ -1980,7 +2244,7 @@ function renderItemChips(item) {
   });
   if (item.risk) {
     const effects = Object.entries(item.risk.effects).map(([key, value]) => `${tr(CONFIG.stats[key], 'name')} ${formatSigned(value)}`).join(', ');
-    chips.push(`<span class="chip chip-risk">⚠ ${escapeHtml(t('riskChip', getRiskChance(item), tr(item, 'riskText'), effects))}</span>`);
+    chips.push(`<span class="chip chip-risk">${iconLabel('warning', t('riskChip', getRiskChance(item), tr(item, 'riskText'), effects))}</span>`);
   }
   return chips.join('');
 }
@@ -2084,6 +2348,7 @@ function changeLanguage(language) {
   renderTitle();
   if (revealCharacter) renderReveal(revealCharacter);
   if (game) renderGame();
+  if (game?.result) renderEnd();
 }
 
 // ปุ่ม "เริ่มเกมใหม่": ถ้ามีเกมค้างอยู่ ถามยืนยันก่อน
@@ -2163,12 +2428,13 @@ function continueGame() {
 // (ขั้นนี้ยังไม่เซฟความคืบหน้ารายวัน: เล่นต่อหลังรีเฟรชจะได้กระเป๋า/ของตอนเช้าใหม่ — เซฟจริงในขั้นที่ 6)
 function createGame(character, seed) {
   const inventory = (getOccupation(character.occupationId).startItems ?? []).map(id => createBagItem(id));
+  const stats = calcStartingStats(character);
   return {
     day: 1,
     phase: 'morning', // morning → night → summary → morning ... / dead / won
     seed,             // เลขสุ่มประจำเกม (ภาพเมือง/สภาพอากาศ)
     character,
-    stats: calcStartingStats(character),
+    stats,
     inventorySlots: calcInventorySlots(character),
     inventory,
     worn: { bag: null }, // ของที่ใส่อยู่ (ช่องสวมใส่ → id ของ) เช่น { bag: 'backpack' }
@@ -2178,6 +2444,28 @@ function createGame(character, seed) {
     log: [],
     lastDamageCause: null, // สาเหตุล่าสุดที่ทำให้พลังชีวิตลด
     death: null,      // { day, phase, cause } เมื่อพลังชีวิตหมด
+    tally: createTally(stats), // สถิติของเกมนี้ (แสดงในหน้าสรุปตอนจบ)
+    result: null,     // { won, dayReached, isNewBest, best } เมื่อเกมจบ (ตาย/รอดครบ)
+  };
+}
+
+// สถิติของเกมนี้: นับไปเรื่อย ๆ ระหว่างเล่น แสดงในหน้าสรุปตอนจบ
+function createTally(stats) {
+  return {
+    nightsSurvived: 0, // คืนที่ผ่านครบทุกขั้นโดยไม่ตาย
+    attackTotal: 0,    // แรงบุกรวมทุกคืน
+    blockedTotal: 0,   // แรงบุกที่กันได้ (ไม่เกินแรงบุกของคืนนั้น)
+    hpLost: 0,         // พลังชีวิตที่เสียไปทุกสาเหตุ
+    worstNight: null,  // { day, threatId, damage } คืนที่เสียหายมากที่สุด
+    hordesSurvived: 0,
+    bossesSurvived: 0,
+    itemsPicked: 0,
+    itemsUsed: 0,
+    ammoFired: 0,
+    itemsBroken: 0,
+    foodEmptyDays: 0,  // สิ้นวันแล้วอาหารเป็น 0
+    waterEmptyDays: 0, // สิ้นวันแล้วน้ำเป็น 0
+    maxStress: stats.stress,
   };
 }
 
@@ -2306,6 +2594,37 @@ function validateConfig() {
     if (!(typeof value === 'number' && value >= 0)) errors.push(`dayEnd.${key} ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป`);
   });
 
+  // ข้อความปิดท้ายตอนตาย: ช่วงแรกต้องเริ่มวันที่ 1 และเรียงวันจากน้อยไปมาก
+  const deathEndings = CONFIG.endings.died;
+  if (deathEndings[0]?.fromDay !== 1) errors.push('endings.died: ช่วงแรกต้องเริ่ม fromDay: 1');
+  deathEndings.forEach((ending, index) => {
+    if (index > 0 && ending.fromDay <= deathEndings[index - 1].fromDay) errors.push(`endings.died[${index}]: fromDay ต้องมากกว่าช่วงก่อนหน้า`);
+    if (!ending.desc) errors.push(`endings.died[${index}]: ต้องมี desc (ข้อความปิดท้าย)`);
+  });
+  if (!CONFIG.endings.won?.desc) errors.push('endings.won: ต้องมี desc (ข้อความปิดท้ายตอนรอดครบ)');
+
+  // ไอคอนพิกเซล (icons.js): แผนที่พิกเซลต้องไม่เกิน 16x16 และใช้แต่สีที่มีใน ICON_COLORS
+  Object.keys(PIXEL_ICONS).forEach(id => getIconLayers(id).forEach(rows => {
+    if (rows.length > ICON_SIZE) errors.push(`icons.js ${id}: เกิน ${ICON_SIZE} แถว`);
+    rows.forEach((row, y) => {
+      if (row.length > ICON_SIZE) errors.push(`icons.js ${id} แถวที่ ${y + 1}: ยาวเกิน ${ICON_SIZE} ตัว`);
+      const unknown = [...row].find(ch => ch !== '.' && !ICON_COLORS[ch]);
+      if (unknown) errors.push(`icons.js ${id} แถวที่ ${y + 1}: ตัวอักษร "${unknown}" ไม่มีสีใน ICON_COLORS`);
+    });
+  }));
+  // ทุกช่อง icon ต้องมีไอคอนใน icons.js
+  [
+    ...Object.entries(CONFIG.stats).map(([key, stat]) => [`ค่าสถานะ ${key}`, stat.icon]),
+    ...CONFIG.occupations.map(job => [`อาชีพ ${job.id}`, job.icon]),
+    ...CONFIG.traits.map(trait => [`นิสัย ${trait.id}`, trait.icon]),
+    ...CONFIG.nightThreats.map(threat => [`ชนิดการบุก ${threat.id}`, threat.icon]),
+    ...CONFIG.weather.map(weather => [`สภาพอากาศ ${weather.id}`, weather.icon]),
+    ...ITEMS.map(item => [`items.js ${item.id}`, item.icon]),
+    ...UI_ICON_IDS.map(id => ['หน้าจอ (UI_ICON_IDS)', id]),
+  ].forEach(([owner, id]) => {
+    if (!PIXEL_ICONS[id]) errors.push(`${owner}: ไม่มีไอคอน "${id}" ใน icons.js`);
+  });
+
   // คำแปลต้องครบทุกภาษา: ข้อความหน้าจอใน lang.js และชื่อ/คำอธิบายใน config.js, names.js
   const otherLanguages = Object.keys(TEXT).filter(language => language !== DEFAULT_LANGUAGE);
   for (const language of otherLanguages) {
@@ -2325,6 +2644,8 @@ function validateConfig() {
     CONFIG.difficultyStages.forEach(stage => checkTranslation(`ช่วงความยาก ${stage.id}`, stage));
     CONFIG.weather.forEach(weather => checkTranslation(`สภาพอากาศ ${weather.id}`, weather));
     CONFIG.nightThreats.forEach(threat => checkTranslation(`ชนิดการบุก ${threat.id}`, threat));
+    CONFIG.endings.died.forEach(ending => checkTranslation(`ข้อความปิดท้ายวันที่ ${ending.fromDay}+`, ending));
+    checkTranslation('ข้อความปิดท้ายตอนรอดครบ', CONFIG.endings.won);
     Object.entries(MOD_INFO).forEach(([key, info]) => checkTranslation(`MOD_INFO ${key}`, info));
     ITEMS.forEach(item => checkTranslation(`ของ ${item.id}`, item));
     [ITEM_TYPES, ITEM_RARITIES, ITEM_PASSIVE_INFO, ITEM_WEAR_SLOTS].forEach(table => {
@@ -2366,12 +2687,12 @@ function saveSoundSetting(enabled) {
   }
 }
 
-// ไอคอนลำโพง: 🔊 = เปิดอยู่ (กดเพื่อปิด) / 🔇 = ปิดอยู่ (กดเพื่อเปิด)
+// ไอคอนลำโพง: มีคลื่นเสียง = เปิดอยู่ (กดเพื่อปิด) / มีกากบาท = ปิดอยู่ (กดเพื่อเปิด)
 function renderSoundButton() {
   const button = byId('sound-toggle');
   const label = soundEnabled ? t('soundMute') : t('soundUnmute');
   button.hidden = !isMusicSupported();
-  button.textContent = soundEnabled ? '🔊' : '🔇';
+  button.innerHTML = iconHtml(soundEnabled ? 'speaker' : 'speaker_off', 2);
   button.title = label;
   button.setAttribute('aria-label', label);
   button.setAttribute('aria-pressed', String(soundEnabled));
@@ -2411,6 +2732,8 @@ function bindEvents() {
   byId('btn-reveal-back').addEventListener('click', backFromReveal);
   byId('btn-start-day').addEventListener('click', startDayOne);
   byId('btn-home').addEventListener('click', goToTitle);
+  byId('btn-end-home').addEventListener('click', goToTitle);
+  byId('btn-end-new-game').addEventListener('click', onNewGameClick);
   byId('sound-toggle').addEventListener('click', onSoundToggle);
   document.addEventListener('click', startMusicOnGesture);
   document.addEventListener('keydown', startMusicOnGesture);
@@ -2441,7 +2764,7 @@ function bindEvents() {
     if (action === 'end-morning') endMorning();
     if (action === 'resolve-night') resolveNight();
     if (action === 'next-day') startNextDay();
-    if (action === 'new-game') onNewGameClick();
+    if (action === 'show-end') showEndScreen();
   });
   // ติ๊ก "ยิงปืนคืนนี้" แล้ววาดตัวเลขคาดการณ์ใหม่
   byId('phase-body').addEventListener('change', event => {
@@ -2468,6 +2791,7 @@ function bindEvents() {
 
 function init() {
   validateConfig();
+  byId('favicon').href = iconUrl('zombie'); // ไอคอนแท็บเป็นซอมบี้พิกเซล
   bindEvents();
   applyStaticTexts();
   renderSoundButton();

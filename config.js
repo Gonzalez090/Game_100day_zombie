@@ -14,12 +14,12 @@ const CONFIG = {
   //   higherIsWorse: true = ยิ่งมากยิ่งแย่ (ความเหนื่อย, ความเครียด)
   // พลังชีวิตสูงสุดของแต่ละคนเปลี่ยนตามผล maxHp
   stats: {
-    hp:      { name: 'พลังชีวิต',   en: { name: 'Health' },  icon: '❤️', start: 100, max: 100, warnAt: 25 },
-    food:    { name: 'อาหาร',      en: { name: 'Food' },    icon: '🍖', start: 100, max: 100, warnAt: 25 },
-    water:   { name: 'น้ำ',         en: { name: 'Water' },   icon: '💧', start: 100, max: 100, warnAt: 25 },
-    ammo:    { name: 'กระสุน',     en: { name: 'Ammo' },    icon: '🔫', start: 15,  max: 50,  warnAt: 3 },
-    fatigue: { name: 'ความเหนื่อย', en: { name: 'Fatigue' }, icon: '🥱', start: 0,   max: 100, warnAt: 75, higherIsWorse: true },
-    stress:  { name: 'ความเครียด',  en: { name: 'Stress' },  icon: '😰', start: 0,   max: 100, warnAt: 75, higherIsWorse: true },
+    hp:      { name: 'พลังชีวิต',   en: { name: 'Health' },  icon: 'heart', start: 100, max: 100, warnAt: 25 },
+    food:    { name: 'อาหาร',      en: { name: 'Food' },    icon: 'meat', start: 100, max: 100, warnAt: 25 },
+    water:   { name: 'น้ำ',         en: { name: 'Water' },   icon: 'water_drop', start: 100, max: 100, warnAt: 25 },
+    ammo:    { name: 'กระสุน',     en: { name: 'Ammo' },    icon: 'bullets', start: 15,  max: 50,  warnAt: 3 },
+    fatigue: { name: 'ความเหนื่อย', en: { name: 'Fatigue' }, icon: 'tired', start: 0,   max: 100, warnAt: 75, higherIsWorse: true },
+    stress:  { name: 'ความเครียด',  en: { name: 'Stress' },  icon: 'sweat', start: 0,   max: 100, warnAt: 75, higherIsWorse: true },
   },
 
   inventory: {
@@ -37,7 +37,7 @@ const CONFIG = {
     // ของหายาก/หายากมากลดลงเรื่อย ๆ จนเหลือ (1 - ค่านี้) ในวันสุดท้าย: 0.5 = เหลือครึ่งเดียวที่วัน 100
     lateGameRareCut: 0.5,
   },
-  itemImages: false, // true = ใช้รูป images/items/<id>.png แทนอีโมจิ (ต้องมีรูปครบทุกชิ้น)
+  itemImages: false, // true = ใช้รูป images/items/<id>.png แทนไอคอนพิกเซลใน icons.js (ต้องมีรูปครบทุกชิ้น)
 
   // เพศมีผลแค่ชื่อกับรูปลักษณ์ ไม่มีผลต่อค่าสถานะหรือความยาก
   genders: {
@@ -77,49 +77,49 @@ const CONFIG = {
   // startItems     = ของติดตัวตอนเริ่มเกม (id ใน items.js)
   occupations: [
     {
-      id: 'nurse', name: 'พยาบาล', icon: '🩺',
+      id: 'nurse', name: 'พยาบาล', icon: 'nurse_cap',
       desc: 'ทำแผลและใช้ยาเป็น ยารักษาได้ผลกว่าคนอื่น แต่ไม่เคยจับปืน',
       en: { name: 'Nurse', desc: 'Knows wound care and medicine, so healing works better, but has never held a gun.' },
       mods: { healPower: 25, ammo: -3 },
       startItems: ['bandage'],
     },
     {
-      id: 'mechanic', name: 'ช่างซ่อม', icon: '🔧',
+      id: 'mechanic', name: 'ช่างซ่อม', icon: 'wrench',
       desc: 'ซ่อมประตูหน้าต่างให้แน่นหนาได้ดีกว่าใคร แต่งานช่างใช้แรงจนเหนื่อยง่าย',
       en: { name: 'Mechanic', desc: 'Reinforces doors and windows better than anyone, but the heavy work is tiring.' },
       mods: { defensePower: 20, fatigueGain: 5 },
       startItems: ['wooden_planks'],
     },
     {
-      id: 'student', name: 'นักเรียน', icon: '🎒', minAge: 18, maxAge: 22,
+      id: 'student', name: 'นักเรียน', icon: 'book', minAge: 18, maxAge: 22,
       desc: 'ตาไว รู้ว่าร้านสะดวกซื้อซ่อนของไว้ตรงไหน แต่ไม่เคยต่อสู้จริง',
       en: { name: 'Student', desc: 'Sharp-eyed and knows where convenience stores hide supplies, but has never really fought.' },
       mods: { lootLuck: 15, zombieDamage: 5 },
       startItems: ['chocolate'],
     },
     {
-      id: 'soldier', name: 'ทหารเกณฑ์', icon: '🪖', minAge: 18, maxAge: 26,
+      id: 'soldier', name: 'ทหารเกณฑ์', icon: 'army_helmet', minAge: 18, maxAge: 26,
       desc: 'ผ่านการฝึกยิงปืนและมีกระสุนติดตัวมา แต่ชินกับการกินทีละเยอะ ๆ',
       en: { name: 'Conscript', desc: 'Trained to shoot and carries spare ammo, but is used to eating big portions.' },
       mods: { ammo: 10, ammoPower: 15, foodUse: 5 },
       startItems: ['kitchen_knife'],
     },
     {
-      id: 'cook', name: 'พ่อครัว', nameFemale: 'แม่ครัว', icon: '🍳',
+      id: 'cook', name: 'พ่อครัว', nameFemale: 'แม่ครัว', icon: 'frying_pan',
       desc: 'ปรุงเสบียงให้อิ่มนานขึ้น แต่ชอบรสจัดจนคอแห้งบ่อย',
       en: { name: 'Cook', desc: 'Makes rations last longer, but loves spicy food and gets thirsty often.' },
       mods: { foodPower: 20, waterUse: 5 },
       startItems: ['canned_fish'],
     },
     {
-      id: 'farmer', name: 'เกษตรกร', icon: '🌾',
+      id: 'farmer', name: 'เกษตรกร', icon: 'farmer_hat',
       desc: 'รู้วิธีหาและประหยัดน้ำ แต่ไม่คุ้นกับซอกซอยในเมือง',
       en: { name: 'Farmer', desc: 'Knows how to find and save water, but gets lost in city alleys.' },
       mods: { waterUse: -15, lootLuck: -5 },
       startItems: ['water_bottle'],
     },
     {
-      id: 'office', name: 'พนักงานออฟฟิศ', icon: '💼',
+      id: 'office', name: 'พนักงานออฟฟิศ', icon: 'briefcase',
       desc: 'ชินกับแรงกดดันจากงานจนเครียดยาก แต่นั่งโต๊ะมาทั้งชีวิต ร่างกายไม่ค่อยฟิต',
       en: { name: 'Office worker', desc: 'Used to workplace pressure so stress builds slowly, but a desk job left the body out of shape.' },
       mods: { stressGain: -15, maxHp: -5 },
@@ -134,42 +134,42 @@ const CONFIG = {
   traits: [
     // --- 6 นิสัยตามสเปก ---
     {
-      id: 'calm', name: 'ใจเย็น', icon: '🧘',
+      id: 'calm', name: 'ใจเย็น', icon: 'calm',
       desc: 'สติดี ไม่ตื่นตูมเวลาเจอซอมบี้ แต่คิดนานเกินไปเวลามีเรื่องด่วน',
       en: { name: 'Calm', desc: 'Keeps a cool head around zombies, but overthinks emergencies.' },
       mods: { zombieDamage: -10, emergencyFail: 10 },
       conflicts: ['coward', 'hothead'],
     },
     {
-      id: 'coward', name: 'ขี้กลัว', icon: '😨',
+      id: 'coward', name: 'ขี้กลัว', icon: 'scared',
       desc: 'ได้ยินเสียงนิดเดียวก็หนีทัน แต่ใจเต้นแรงจนเครียดง่าย',
       en: { name: 'Cowardly', desc: 'Bolts at the slightest sound, but a racing heart makes stress build fast.' },
       mods: { nightDamage: -10, stressGain: 10 },
       conflicts: ['calm', 'optimist'],
     },
     {
-      id: 'strong', name: 'ร่างกายแข็งแรง', icon: '💪',
+      id: 'strong', name: 'ร่างกายแข็งแรง', icon: 'muscle',
       desc: 'ร่างกายทนทาน รับแผลได้มากกว่าคนอื่น แต่ก็หิวบ่อยกว่า',
       en: { name: 'Tough body', desc: 'Can take more punishment than most, but gets hungry more often.' },
       mods: { maxHp: 10, foodUse: 10 },
       conflicts: ['smallEater'],
     },
     {
-      id: 'observant', name: 'นักสังเกต', icon: '🔍',
+      id: 'observant', name: 'นักสังเกต', icon: 'magnifier',
       desc: 'สายตาไว เจอของดีที่คนอื่นมองข้าม แต่สมองไม่หยุดคิดจนนอนไม่ค่อยหลับ',
       en: { name: 'Observant', desc: 'Spots good stuff others miss, but a restless mind makes sleep hard.' },
       mods: { lootLuck: 10, restRecovery: -10 },
       conflicts: ['deepSleeper'],
     },
     {
-      id: 'kind', name: 'ใจดี', icon: '🤝',
+      id: 'kind', name: 'ใจดี', icon: 'kind_heart',
       desc: 'ผู้รอดชีวิตคนอื่นมักเป็นมิตรด้วย แต่ก็ถูกหลอกได้ง่าย',
       en: { name: 'Kind-hearted', desc: 'Other survivors tend to be friendly, but is easy to fool.' },
       mods: { survivorLuck: 10, scamRisk: 10 },
       conflicts: ['stingy'],
     },
     {
-      id: 'stingy', name: 'ขี้เหนียว', icon: '🪙',
+      id: 'stingy', name: 'ขี้เหนียว', icon: 'coin',
       desc: 'ยัดของได้มากกว่าคนอื่น แต่เสียดายจนทิ้งอะไรไม่ค่อยลง',
       en: { name: 'Stingy', desc: 'Crams in more stuff than anyone, but hates throwing anything away.' },
       mods: { slots: 1, discardStress: 5 },
@@ -177,28 +177,28 @@ const CONFIG = {
     },
     // --- นิสัยที่ออกแบบเพิ่ม (ลบทิ้งได้ถ้าไม่ต้องการ) ---
     {
-      id: 'hothead', name: 'ใจร้อน', icon: '🔥',
+      id: 'hothead', name: 'ใจร้อน', icon: 'fire',
       desc: 'ตัดสินใจไวเวลามีเรื่องด่วน แต่ชอบบุ่มบ่ามเข้าใส่ซอมบี้',
       en: { name: 'Hot-headed', desc: 'Decides fast in emergencies, but charges at zombies recklessly.' },
       mods: { emergencyFail: -10, zombieDamage: 10 },
       conflicts: ['calm'],
     },
     {
-      id: 'deepSleeper', name: 'ขี้เซา', icon: '😴',
+      id: 'deepSleeper', name: 'ขี้เซา', icon: 'sleepy',
       desc: 'หลับลึกจนฟื้นแรงได้เต็มที่ แต่ตื่นช้าเวลาซอมบี้บุก',
       en: { name: 'Heavy sleeper', desc: 'Sleeps deeply and recovers fully, but wakes up late when zombies attack.' },
       mods: { restRecovery: 10, nightDamage: 10 },
       conflicts: ['observant'],
     },
     {
-      id: 'smallEater', name: 'กินน้อย', icon: '🥢',
+      id: 'smallEater', name: 'กินน้อย', icon: 'rice_bowl',
       desc: 'กินนิดเดียวก็อยู่ได้ แต่ร่างกายบอบบางกว่าคนอื่น',
       en: { name: 'Light eater', desc: 'Gets by on very little food, but has a frailer body.' },
       mods: { foodUse: -10, maxHp: -10 },
       conflicts: ['strong'],
     },
     {
-      id: 'optimist', name: 'มองโลกในแง่ดี', icon: '🌤️',
+      id: 'optimist', name: 'มองโลกในแง่ดี', icon: 'sun_cloud',
       desc: 'คิดบวกจนเครียดยาก แต่ชอบคิดว่าของเสี่ยง ๆ ไม่เป็นไรหรอก',
       en: { name: 'Optimist', desc: 'Positive thinking keeps stress low, but assumes risky stuff will be fine.' },
       mods: { stressGain: -10, riskyChance: 10 },
@@ -267,32 +267,32 @@ const CONFIG = {
   //   attackBonus = แรงบุกเพิ่มจากปกติ / special = สุ่มได้ในคืนที่มีซอมบี้พิเศษ
   nightThreats: [
     {
-      id: 'wanderers', icon: '🧟', attackBonus: 0,
+      id: 'wanderers', icon: 'zombie', attackBonus: 0,
       name: 'ซอมบี้เร่ร่อน', desc: 'ซอมบี้กลุ่มเล็กเดินตามกลิ่นมาเคาะประตูทั้งคืน',
       en: { name: 'Wandering zombies', desc: 'A small group follows your scent and pounds on the door all night.' },
     },
     {
-      id: 'runner', icon: '💨', attackBonus: 4, special: true,
+      id: 'runner', icon: 'runner', attackBonus: 4, special: true,
       name: 'ซอมบี้วิ่งไว', desc: 'พุ่งเข้าหาเร็วจนแทบตั้งตัวไม่ทัน',
       en: { name: 'Runner', desc: 'Charges in so fast you barely have time to react.' },
     },
     {
-      id: 'bloater', icon: '🦠', attackBonus: 4, special: true,
+      id: 'bloater', icon: 'germ', attackBonus: 4, special: true,
       name: 'ซอมบี้ตัวบวม', desc: 'ตัวพองใหญ่ ทิ้งน้ำหนักทั้งตัวกระแทกประตูจนสั่น',
       en: { name: 'Bloater', desc: 'A swollen hulk that throws its whole weight against the door.' },
     },
     {
-      id: 'screamer', icon: '😱', attackBonus: 4, special: true,
+      id: 'screamer', icon: 'screamer', attackBonus: 4, special: true,
       name: 'ซอมบี้กรีดร้อง', desc: 'เสียงกรีดร้องเรียกพวกมันมารุมจากทุกซอย',
       en: { name: 'Screamer', desc: 'Its shriek calls the others in from every alley.' },
     },
     {
-      id: 'horde', icon: '🌊', attackBonus: 8,
+      id: 'horde', icon: 'horde', attackBonus: 8,
       name: 'คลื่นซอมบี้ใหญ่', desc: 'ฝูงซอมบี้นับร้อยไหลมาตามถนนเหมือนน้ำป่า',
       en: { name: 'Zombie horde', desc: 'Hundreds of them pour down the street like a flash flood.' },
     },
     {
-      id: 'boss', icon: '👹', attackBonus: 15,
+      id: 'boss', icon: 'ogre', attackBonus: 15,
       name: 'ซอมบี้ยักษ์', desc: 'ร่างสูงเกือบสามเมตร ทุบกำแพงทีเดียวก็ร้าว',
       en: { name: 'Hulking brute', desc: 'Nearly three meters tall. One blow cracks the wall.' },
     },
@@ -317,16 +317,40 @@ const CONFIG = {
     stressedRestFactor: 0.5,
   },
 
+  // ---------- ข้อความปิดท้ายในหน้าสรุปตอนจบเกม ----------
+  // died = ตาย: ใช้ข้อความของช่วงที่ fromDay มากที่สุดที่ไม่เกินวันที่ตาย (เรียง fromDay จากน้อยไปมาก)
+  // won  = รอดครบทุกวัน
+  endings: {
+    died: [
+      { fromDay: 1,  desc: 'โลกใหม่ไม่ให้เวลาใครตั้งตัว ยังไม่ทันจำทางกลับที่พักได้ ทุกอย่างก็จบลงแล้ว',
+        en: { desc: 'The new world gives no one time to adjust. Before you even learned the way back to the shelter, it was over.' } },
+      { fromDay: 4,  desc: 'ไม่กี่วันที่ผ่านมาพอให้รู้ว่าเมืองนี้ไม่เหลือใครแล้ว… และในที่สุดก็ไม่เหลือคุณด้วย',
+        en: { desc: 'A few days were enough to learn that no one was left in this city… and in the end, that included you.' } },
+      { fromDay: 16, desc: 'คุณเรียนรู้ที่จะฟังเสียงฝีเท้าในความมืด แต่คืนนั้นมันเงียบเกินกว่าจะได้ยินทัน',
+        en: { desc: 'You learned to listen for footsteps in the dark. That night they were too quiet to hear in time.' } },
+      { fromDay: 41, desc: 'ปฏิทินบนผนังมีรอยขีดมากกว่าช่องว่างแล้ว… แต่จะไม่มีใครขีดต่อจากนี้อีก',
+        en: { desc: 'The calendar on the wall had more marks than blank days… but no one will add another.' } },
+      { fromDay: 71, desc: 'วิทยุยังส่งเสียงแผ่ว ๆ ทุกเช้าว่าความช่วยเหลือใกล้มาถึง ใกล้มาก… แต่ไม่ใกล้พอ',
+        en: { desc: 'Every morning the radio still crackled that help was close. Very close… just not close enough.' } },
+      { fromDay: 95, desc: 'อีกไม่กี่วันเสียงใบพัดที่รอคอยคงดังขึ้นเหนือเมือง แต่จะไม่มีใครเหลืออยู่บนดาดฟ้าให้โบกมือ',
+        en: { desc: 'In a few days the rotor blades will finally sound over the city, but no one will be left on the rooftop to wave.' } },
+    ],
+    won: {
+      desc: 'รุ่งเช้า เสียงใบพัดเฮลิคอปเตอร์ดังขึ้นเหนือเมืองที่เงียบงัน คุณโบกมือจากดาดฟ้าด้วยแขนที่สั่นเทา มองเมืองที่เคยเป็นบ้านเป็นครั้งสุดท้าย คุณรอดแล้ว… แต่บางส่วนของคุณจะอยู่ที่นี่ตลอดไป',
+      en: { desc: 'At dawn, rotor blades thundered over the silent city. You waved from the rooftop with shaking arms and looked at the city that used to be home one last time. You made it… but part of you will stay here forever.' },
+    },
+  },
+
   sceneNightZombieBonus: 50, // ภาพตอนกลางคืนมีซอมบี้มากกว่าตอนเช้ากี่ % (มีผลแค่ภาพ)
 
   // ---------- สภาพอากาศสุ่มรายวัน (ตอนนี้มีผลแค่ภาพ) ----------
   // แต่ละเกมสุ่มลำดับอากาศไม่เหมือนกัน (ใช้เลขสุ่มประจำเกมที่เก็บไว้ในเซฟ)
   // coversSky = เมฆบังดวงอาทิตย์/ดาว/พระจันทร์, birds: false = ไม่มีอีกาบิน
   weather: [
-    { id: 'clear',  icon: '☀️', name: 'ฟ้าโปร่ง', en: { name: 'Clear' },    weight: 55 },
-    { id: 'cloudy', icon: '☁️', name: 'ฟ้าครึ้ม', en: { name: 'Overcast' }, weight: 20, coversSky: true },
-    { id: 'rain',   icon: '🌧️', name: 'ฝนตก',    en: { name: 'Rain' },     weight: 15, coversSky: true, birds: false },
-    { id: 'fog',    icon: '🌁', name: 'หมอกลง',  en: { name: 'Fog' },      weight: 10 },
+    { id: 'clear',  icon: 'sun', name: 'ฟ้าโปร่ง', en: { name: 'Clear' },    weight: 55 },
+    { id: 'cloudy', icon: 'cloud', name: 'ฟ้าครึ้ม', en: { name: 'Overcast' }, weight: 20, coversSky: true },
+    { id: 'rain',   icon: 'rain', name: 'ฝนตก',    en: { name: 'Rain' },     weight: 15, coversSky: true, birds: false },
+    { id: 'fog',    icon: 'fog', name: 'หมอกลง',  en: { name: 'Fog' },      weight: 10 },
   ],
 
   // ---------- เพลงพื้นหลัง (แต่งและสร้างเสียงสดใน audio.js) ----------

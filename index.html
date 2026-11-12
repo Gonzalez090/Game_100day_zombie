@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>100 วันรอดซอมบี้</title>
-  <!-- ไอคอนแท็บแบบฝังในหน้า (กันเบราว์เซอร์ขอ favicon.ico แล้วขึ้น 404) -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%9F%3C/text%3E%3C/svg%3E">
+  <!-- ไอคอนแท็บ: game.js ใส่ไอคอนพิกเซลซอมบี้ให้ตอนเปิดเกม (ค่าว่างนี้กันเบราว์เซอร์ขอ favicon.ico แล้วขึ้น 404) -->
+  <link id="favicon" rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- ข้อความที่มี data-i18n จะถูกเปลี่ยนตามภาษาที่เลือก (ข้อความอยู่ใน lang.js) -->
 
   <!-- ปุ่มเปิด/ปิดเพลง มุมขวาบน (แสดงทุกหน้า) ไอคอนและข้อความตั้งใน game.js -->
-  <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">🔊</button>
+  <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true"></button>
 
   <!-- ===== หน้าแรก ===== -->
   <section id="screen-title" class="screen screen-title">
@@ -34,6 +34,7 @@
         <button id="btn-new-game" class="btn btn-primary" type="button" data-i18n="newGameButton">เริ่มเกมใหม่</button>
       </div>
       <p id="title-save-info" class="title-save-info"></p>
+      <p id="title-best" class="title-best" hidden></p>
       <p class="title-note" data-i18n="titleNote">ทุกเกมใหม่ระบบจะสุ่มตัวละครให้ คุณเลือกเองไม่ได้ ต้องเอาชีวิตรอดด้วยสิ่งที่ได้มา</p>
     </div>
   </section>
@@ -75,7 +76,7 @@
       </div>
     </div>
     <div class="reveal-actions">
-      <button id="btn-reroll" class="btn" type="button" data-i18n="rerollButton">🎲 สุ่มใหม่</button>
+      <button id="btn-reroll" class="btn" type="button" data-i18n="rerollButton" data-icon="dice">สุ่มใหม่</button>
       <button id="btn-start-day" class="btn btn-primary" type="button" data-i18n="startDayButton">เริ่มวันที่ 1 ▶</button>
     </div>
     <p class="reveal-note" data-i18n="revealNote">เมื่อกดเริ่มวันที่ 1 ตัวละครจะถูกล็อก สุ่มใหม่ไม่ได้จนกว่าจะเริ่มเกมใหม่</p>
@@ -134,6 +135,41 @@
     </main>
   </section>
 
+  <!-- ===== หน้าสรุปตอนจบเกม (เสียชีวิต / รอดครบ) ===== -->
+  <section id="screen-end" class="screen screen-end" hidden>
+    <p class="end-kicker" data-i18n="endKicker">บันทึกผู้รอดชีวิต</p>
+    <h2 id="end-title" class="end-title"></h2>
+    <div id="end-card" class="end-card">
+      <div class="reveal-hero">
+        <div class="sprite-frame"><canvas id="end-sprite" class="sprite sprite-large" role="img"></canvas></div>
+        <div class="reveal-identity">
+          <h3 id="end-name" class="reveal-name"></h3>
+          <p id="end-basic" class="reveal-basic"></p>
+          <p id="end-occupation" class="reveal-occupation"></p>
+          <div id="end-traits" class="trait-tags"></div>
+        </div>
+      </div>
+      <!-- ไปได้กี่วัน + หลอดความคืบหน้า + สาเหตุการตาย -->
+      <div class="end-progress">
+        <p id="end-days" class="end-days"></p>
+        <div id="end-bar" class="stat-bar end-bar" role="progressbar" aria-valuemin="0">
+          <div id="end-bar-fill" class="stat-fill"></div>
+        </div>
+        <p id="end-cause" class="end-cause"></p>
+      </div>
+      <p id="end-epilogue" class="end-epilogue"></p>
+      <!-- สถิติของเกมนี้ 3 หมวด: การต่อสู้ / ของ / ร่างกาย -->
+      <div id="end-stats" class="end-stats"></div>
+      <!-- สถิติดีที่สุด (เก็บข้ามเกมใน localStorage คีย์ zombie100.best) -->
+      <div id="end-best" class="end-best"></div>
+    </div>
+    <div class="reveal-actions">
+      <button id="btn-end-home" class="btn" type="button" data-i18n="backToTitleButton">← กลับหน้าหลัก</button>
+      <button id="btn-end-new-game" class="btn btn-primary" type="button" data-i18n="newGameButton">เริ่มเกมใหม่</button>
+    </div>
+    <p class="reveal-note" data-i18n="endNote">ตัวละครนี้จบการเดินทางแล้ว เกมใหม่จะสุ่มผู้รอดชีวิตคนใหม่ให้</p>
+  </section>
+
   <!-- แสงแดงกะพริบทั้งจอตอนเสียพลังชีวิต (เล่นด้วย class is-hit ใน game.js) -->
   <div id="hit-flash" class="hit-flash" aria-hidden="true"></div>
 
@@ -155,6 +191,7 @@
   <script src="lang.js"></script>
   <script src="items.js"></script>
   <script src="sprites.js"></script>
+  <script src="icons.js"></script>
   <script src="audio.js"></script>
   <script src="game.js"></script>
 </body>

@@ -49,55 +49,55 @@ const ITEM_PASSIVE_INFO = {
 const ITEMS = [
   // ---------- เสบียง ----------
   {
-    id: 'canned_fish', icon: '🐟', type: 'supply', rarity: 'common', uses: 1,
+    id: 'canned_fish', icon: 'canned_fish', type: 'supply', rarity: 'common', uses: 1,
     name: 'ปลากระป๋อง', desc: 'อิ่มท้องแน่นอน เปิดกินได้ทันที',
     en: { name: 'Canned fish', desc: 'Reliable protein, ready to eat.' },
     use: { food: 25 },
   },
   {
-    id: 'instant_noodles', icon: '🍜', type: 'supply', rarity: 'common', uses: 1,
+    id: 'instant_noodles', icon: 'instant_noodles', type: 'supply', rarity: 'common', uses: 1,
     name: 'บะหมี่กึ่งสำเร็จรูป', desc: 'อิ่มนาน แต่ต้องเสียน้ำต้ม',
     en: { name: 'Instant noodles', desc: 'Filling, but costs water to cook.' },
     use: { food: 30, water: -8 },
   },
   {
-    id: 'water_bottle', icon: '💧', type: 'supply', rarity: 'common', uses: 1,
+    id: 'water_bottle', icon: 'water_bottle', type: 'supply', rarity: 'common', uses: 1,
     name: 'น้ำดื่มขวด', desc: 'น้ำสะอาดปิดฝาสนิท ดื่มได้เลย',
     en: { name: 'Bottled water', desc: 'Sealed, clean water.' },
     use: { water: 30 },
   },
   {
-    id: 'rice_bag', icon: '🍚', type: 'supply', rarity: 'rare', uses: 3,
+    id: 'rice_bag', icon: 'rice_bag', type: 'supply', rarity: 'rare', uses: 3,
     name: 'ข้าวสารถุง', desc: 'หุงได้หลายมื้อ แต่ทุกมื้อต้องใช้น้ำ',
     en: { name: 'Bag of rice', desc: 'Several meals, but each one needs water.' },
     use: { food: 20, water: -5 },
   },
   {
-    id: 'energy_drink', icon: '⚡', type: 'supply', rarity: 'common', uses: 1,
+    id: 'energy_drink', icon: 'energy_drink', type: 'supply', rarity: 'common', uses: 1,
     name: 'เครื่องดื่มชูกำลัง', desc: 'หายเหนื่อยทันตาเห็น แต่ใจสั่น',
     en: { name: 'Energy drink', desc: 'Kills the fatigue fast, but makes you jittery.' },
     use: { fatigue: -25, stress: 5 },
   },
   {
-    id: 'chocolate', icon: '🍫', type: 'supply', rarity: 'common', uses: 1,
+    id: 'chocolate', icon: 'chocolate', type: 'supply', rarity: 'common', uses: 1,
     name: 'ช็อกโกแลต', desc: 'หวานนิดเดียวก็ทำให้ใจชื้นขึ้น',
     en: { name: 'Chocolate bar', desc: 'A little sweetness lifts the mood.' },
     use: { food: 10, stress: -12 },
   },
   {
-    id: 'bandage', icon: '🩹', type: 'supply', rarity: 'common', uses: 2,
+    id: 'bandage', icon: 'bandage', type: 'supply', rarity: 'common', uses: 2,
     name: 'ผ้าพันแผล', desc: 'ห้ามเลือดแผลเล็ก ๆ ได้สองครั้ง',
     en: { name: 'Bandages', desc: 'Patches up small wounds, twice.' },
     use: { hp: 15 },
   },
   {
-    id: 'first_aid', icon: '⛑️', type: 'supply', rarity: 'rare', uses: 1,
+    id: 'first_aid', icon: 'first_aid', type: 'supply', rarity: 'rare', uses: 1,
     name: 'ชุดปฐมพยาบาล', desc: 'ยาและอุปกรณ์ครบ รักษาแผลหนักได้',
     en: { name: 'First aid kit', desc: 'A full kit that treats serious wounds.' },
     use: { hp: 40, stress: -5 },
   },
   {
-    id: 'ammo_box', icon: '📦', type: 'supply', rarity: 'rare', uses: 1,
+    id: 'ammo_box', icon: 'ammo_box', type: 'supply', rarity: 'rare', uses: 1,
     name: 'กล่องกระสุน', desc: 'กระสุนปืนครึ่งกล่องที่ใครสักคนทิ้งไว้',
     en: { name: 'Box of ammo', desc: 'A half-full box of rounds someone left behind.' },
     use: { ammo: 8 },
@@ -105,25 +105,25 @@ const ITEMS = [
 
   // ---------- อาวุธ (มีผลตอนกลางคืน) ----------
   {
-    id: 'kitchen_knife', icon: '🔪', type: 'weapon', rarity: 'common', uses: 6,
+    id: 'kitchen_knife', icon: 'kitchen_knife', type: 'weapon', rarity: 'common', uses: 6,
     name: 'มีดทำครัว', desc: 'เงียบและเบา แต่ต้องเข้าประชิดตัว',
     en: { name: 'Kitchen knife', desc: 'Quiet and light, but you have to get close.' },
     passive: { weaponPower: 1 },
   },
   {
-    id: 'baseball_bat', icon: '🏏', type: 'weapon', rarity: 'common', uses: 8,
+    id: 'baseball_bat', icon: 'baseball_bat', type: 'weapon', rarity: 'common', uses: 8,
     name: 'ไม้เบสบอล', desc: 'ฟาดหัวซอมบี้ได้แรง ทนทานพอสมควร',
     en: { name: 'Baseball bat', desc: 'Hits hard and lasts a while.' },
     passive: { weaponPower: 2 },
   },
   {
-    id: 'pistol', icon: '🔫', type: 'weapon', rarity: 'rare', uses: 20,
+    id: 'pistol', icon: 'pistol', type: 'weapon', rarity: 'rare', uses: 20,
     name: 'ปืนพก', desc: 'ยิงจากระยะไกลได้ แต่กินกระสุนและเสียงดัง',
     en: { name: 'Pistol', desc: 'Kills from a distance, but eats ammo and makes noise.' },
     passive: { weaponPower: 4, ammoPerNight: 2, noise: 1 },
   },
   {
-    id: 'shotgun', icon: '💥', type: 'weapon', rarity: 'epic', uses: 15,
+    id: 'shotgun', icon: 'shotgun', type: 'weapon', rarity: 'epic', uses: 15,
     name: 'ปืนลูกซอง', desc: 'นัดเดียวกระจุย แต่เสียงดังจนซอมบี้แห่มาเพิ่ม',
     en: { name: 'Shotgun', desc: 'Devastating, but so loud it draws more zombies.' },
     passive: { weaponPower: 7, ammoPerNight: 3, noise: 3 },
@@ -131,19 +131,19 @@ const ITEMS = [
 
   // ---------- ป้องกัน (มีผลตอนกลางคืน) ----------
   {
-    id: 'wooden_planks', icon: '🪵', type: 'defense', rarity: 'common', uses: 4,
+    id: 'wooden_planks', icon: 'wooden_planks', type: 'defense', rarity: 'common', uses: 4,
     name: 'แผ่นไม้ตีหน้าต่าง', desc: 'ตีปิดหน้าต่างกันซอมบี้ได้ไม่กี่คืน',
     en: { name: 'Wooden planks', desc: 'Boards up windows for a few nights.' },
     passive: { defense: 2 },
   },
   {
-    id: 'barbed_wire', icon: '➰', type: 'defense', rarity: 'rare', uses: 6,
+    id: 'barbed_wire', icon: 'barbed_wire', type: 'defense', rarity: 'rare', uses: 6,
     name: 'ลวดหนาม', desc: 'ขึงรอบที่พัก ซอมบี้ฝ่าเข้ามายากขึ้นมาก',
     en: { name: 'Barbed wire', desc: 'Wrapped around the shelter, it slows zombies down a lot.' },
     passive: { defense: 4 },
   },
   {
-    id: 'motorcycle_helmet', icon: '🪖', type: 'defense', rarity: 'rare', uses: 10,
+    id: 'motorcycle_helmet', icon: 'motorcycle_helmet', type: 'defense', rarity: 'rare', uses: 10,
     name: 'หมวกกันน็อก', desc: 'ใส่นอนก็อุ่นใจ กันกัดกันข่วนได้บ้าง',
     en: { name: 'Motorcycle helmet', desc: 'Keeps bites and scratches off your head.' },
     passive: { damageReduction: 15 },
@@ -151,13 +151,13 @@ const ITEMS = [
 
   // ---------- เครื่องมือ ----------
   {
-    id: 'flashlight', icon: '🔦', type: 'tool', rarity: 'common', uses: 5,
+    id: 'flashlight', icon: 'flashlight', type: 'tool', rarity: 'common', uses: 5,
     name: 'ไฟฉาย', desc: 'ส่องหาของในมุมมืดได้มากขึ้น ถ่านอยู่ได้ไม่กี่วัน',
     en: { name: 'Flashlight', desc: 'Lights up dark corners to find more, until the batteries die.' },
     passive: { morningChoices: 1 },
   },
   {
-    id: 'backpack', icon: '🎒', type: 'tool', rarity: 'rare', uses: 0, wear: 'bag',
+    id: 'backpack', icon: 'backpack', type: 'tool', rarity: 'rare', uses: 0, wear: 'bag',
     name: 'กระเป๋าเป้', desc: 'เก็บแล้วสะพายทันที ได้ช่องเก็บของเพิ่ม (ใส่ได้ทีละใบ)',
     en: { name: 'Backpack', desc: 'You put it on as soon as you pick it up for extra bag space (one at a time).' },
     passive: { slots: 2 },
@@ -165,7 +165,7 @@ const ITEMS = [
 
   // ---------- ของเสี่ยง ----------
   {
-    id: 'expired_can', icon: '🥫', type: 'risky', rarity: 'common', uses: 1,
+    id: 'expired_can', icon: 'expired_can', type: 'risky', rarity: 'common', uses: 1,
     name: 'อาหารกระป๋องหมดอายุ', desc: 'กระป๋องบวมนิด ๆ แต่ในนั้นอาหารเพียบ',
     riskText: 'ท้องเสียจากอาหารหมดอายุ',
     en: { name: 'Expired canned food', desc: 'The can is a little swollen, but it is full of food.', riskText: 'food poisoning from expired food' },
@@ -173,7 +173,7 @@ const ITEMS = [
     risk: { chance: 35, effects: { hp: -15 } },
   },
   {
-    id: 'rain_water', icon: '🪣', type: 'risky', rarity: 'common', uses: 1,
+    id: 'rain_water', icon: 'rain_water', type: 'risky', rarity: 'common', uses: 1,
     name: 'น้ำฝนในถัง', desc: 'มีน้ำเต็มถัง แต่ไม่รู้ว่าสะอาดแค่ไหน',
     riskText: 'ท้องร่วงจากน้ำไม่สะอาด',
     en: { name: 'Bucket of rainwater', desc: 'A full bucket, but who knows how clean it is.', riskText: 'sick from dirty water' },
@@ -181,7 +181,7 @@ const ITEMS = [
     risk: { chance: 30, effects: { hp: -10, stress: 5 } },
   },
   {
-    id: 'mystery_pills', icon: '💊', type: 'risky', rarity: 'rare', uses: 1,
+    id: 'mystery_pills', icon: 'mystery_pills', type: 'risky', rarity: 'rare', uses: 1,
     name: 'ยาไม่มีฉลาก', desc: 'อาจเป็นยาแก้ปวดชั้นดี... หรืออะไรก็ไม่รู้',
     riskText: 'แพ้ยาจนอาการทรุด',
     en: { name: 'Unlabeled pills', desc: 'Could be strong painkillers... or anything else.', riskText: 'a bad reaction to the pills' },
