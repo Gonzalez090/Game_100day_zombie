@@ -269,7 +269,7 @@ const TEXT = {
     characterSummary: (name, age, job, traits) => `${name} อายุ ${age} อดีต${job} ${traits}`,
     lookHair: (style, color) => `${style}สี${color}`,
     lookBody: body => `รูปร่าง${body}`,
-    lookShirt: shirt => `เสื้อสี${shirt}`,
+    lookOutfit: (outfit, color) => `${outfit}สี${color}`,
     spriteLabel: look => `ตัวละคร ${look}`,
   },
 
@@ -534,7 +534,7 @@ const TEXT = {
     characterSummary: (name, age, job, traits) => `${name}, ${age}, former ${job.toLowerCase()}, ${traits}`,
     lookHair: (style, color) => `${color.charAt(0).toUpperCase()}${color.slice(1)} ${style}`,
     lookBody: body => `${body} build`,
-    lookShirt: shirt => `${shirt} shirt`,
+    lookOutfit: (outfit, color) => `${color} ${outfit}`,
     spriteLabel: look => `Character: ${look}`,
   },
 };

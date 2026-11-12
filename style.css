@@ -91,8 +91,9 @@ h1, h2, h3, h4 { line-height: 1.3; }
   image-rendering: pixelated; /* ขยายแล้วพิกเซลยังคม ไม่เบลอ */
 }
 /* ภาพตัวละครครึ่งตัว 32x32 ขยายเป็นจำนวนเท่าเพื่อให้พิกเซลเท่ากันทุกจุด */
-.sprite-large  { width: 160px; height: 160px; }
-.sprite-medium { width: 96px;  height: 96px; }
+/* รูปหน้าตัวละคร 64x64 ขยายเป็นจำนวนเท่า (3x / 2x / 1x) พิกเซลจะคมเท่ากันทุกจุด */
+.sprite-large  { width: 192px; height: 192px; }
+.sprite-medium { width: 128px; height: 128px; }
 .sprite-small  { width: 64px;  height: 64px; }
 
 .sprite-frame {

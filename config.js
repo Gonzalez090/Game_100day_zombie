@@ -397,6 +397,8 @@ const CONFIG = {
       { id: 'long',     name: 'ผมยาวตรง',   en: { name: 'long straight hair' }, genders: ['female'] },
       { id: 'ponytail', name: 'ผมหางม้า',   en: { name: 'ponytail' },           genders: ['female'] },
       { id: 'bob',      name: 'ผมบ็อบ',     en: { name: 'bob' },                genders: ['female'] },
+      // หัวล้าน: เฉพาะผู้ชายอายุ minAge ขึ้นไป (เหลือผมข้างหู) noColor = ไม่ต้องบอกสีผมในคำบรรยาย
+      { id: 'bald',     name: 'หัวล้าน',    en: { name: 'bald head' },          genders: ['male'], minAge: 45, noColor: true },
     ],
     hairColors: [
       { id: 'black',  name: 'ดำ',           en: { name: 'black' },       color: '#1e1b1b', weight: 4 },
@@ -405,6 +407,10 @@ const CONFIG = {
       { id: 'blonde', name: 'ทอง',          en: { name: 'blonde' },      color: '#c9a45c' },
       { id: 'red',    name: 'แดงเบอร์กันดี',  en: { name: 'burgundy' },    color: '#7e2b2e' },
       { id: 'ash',    name: 'เทาควันบุหรี่',   en: { name: 'ash gray' },    color: '#8d8a86' },
+      // สีผมสด ๆ (ออกไม่บ่อย)
+      { id: 'purple', name: 'ม่วง',          en: { name: 'purple' },      color: '#7a3c9e', weight: 0.3 },
+      { id: 'pink',   name: 'ชมพู',          en: { name: 'pink' },        color: '#d46a9c', weight: 0.3 },
+      { id: 'blue',   name: 'ฟ้าน้ำทะเล',     en: { name: 'ocean blue' },  color: '#3a6cb8', weight: 0.3 },
     ],
     bodyTypes: [
       { id: 'thin',   name: 'ผอม',  en: { name: 'Thin' } },
@@ -422,6 +428,38 @@ const CONFIG = {
       { id: 'orange',  name: 'ส้ม',           en: { name: 'Orange' },      color: '#c4632c' },
       { id: 'purple',  name: 'ม่วง',          en: { name: 'Purple' },      color: '#68478a' },
       { id: 'sky',     name: 'ฟ้า',           en: { name: 'Sky blue' },    color: '#5a9cc4' },
+      { id: 'pink',    name: 'ชมพู',          en: { name: 'Pink' },        color: '#d97aa8' },
+    ],
+    // ชุดที่ใส่ (สีของชุดใช้ shirtColors) ภาพวาดอยู่ใน portrait.js (รูปหน้า) และ sprites.js (ตัวในภาพประกอบ)
+    outfits: [
+      { id: 'tshirt', name: 'เสื้อยืด',          en: { name: 'T-shirt' },         genders: ['male', 'female'], weight: 4 },
+      { id: 'shirt',  name: 'เสื้อเชิ้ตลายดอก',   en: { name: 'floral shirt' },    genders: ['male', 'female'], weight: 2 },
+      { id: 'suit',   name: 'สูทผูกเน็คไท',       en: { name: 'suit and tie' },    genders: ['male', 'female'] },
+      { id: 'vest',   name: 'เสื้อกั๊ก',          en: { name: 'vest' },            genders: ['male', 'female'] },
+      { id: 'coat',   name: 'เสื้อโค้ตยาว',       en: { name: 'long coat' },       genders: ['male', 'female'] },
+      { id: 'dress',  name: 'ชุดเดรส',          en: { name: 'dress' },           genders: ['female'], weight: 2 },
+    ],
+    pantsColors: [
+      { id: 'jeans', color: '#3a4a6c', weight: 3 },
+      { id: 'black', color: '#2a2a30', weight: 2 },
+      { id: 'khaki', color: '#8a7a56' },
+      { id: 'brown', color: '#5a4030' },
+      { id: 'gray',  color: '#5c6068' },
+      { id: 'orange', color: '#c8742c', weight: 0.5 },
+    ],
+    // หมวก ('none' = ไม่ใส่) color = สีหมวก
+    hats: [
+      { id: 'none',   name: '',              en: { name: '' },                weight: 7 },
+      { id: 'cap',    name: 'หมวกแก๊ป',       en: { name: 'Cap' },             color: '#b8402c' },
+      { id: 'fedora', name: 'หมวกปีกกว้าง',    en: { name: 'Wide-brim hat' },   color: '#6a645e' },
+      { id: 'beanie', name: 'หมวกไหมพรม',     en: { name: 'Beanie' },          color: '#3c5a8c' },
+    ],
+    // ของประดับ head = อยู่บนหัว (ใส่คู่กับหมวกไม่ได้)
+    accessories: [
+      { id: 'none',     name: '',             en: { name: '' },               genders: ['male', 'female'], weight: 7 },
+      { id: 'flower',   name: 'ทัดดอกไม้',      en: { name: 'Hair flower' },    genders: ['female'], head: true },
+      { id: 'bandana',  name: 'ผ้าโพกหัว',      en: { name: 'Bandana' },        genders: ['male', 'female'], head: true },
+      { id: 'earrings', name: 'ต่างหู',        en: { name: 'Earrings' },       genders: ['female'] },
     ],
     // ของประกอบที่สุ่มได้ ('none' = ไม่มี / weight ของ 'none' ยิ่งสูง ของประกอบยิ่งออกน้อย)
     glasses: [

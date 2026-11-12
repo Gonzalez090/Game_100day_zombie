@@ -129,17 +129,20 @@ function describeCharacter(character) {
     getOccupationName(occupation, character.gender), traitNames);
 }
 
-// คำบรรยายรูปลักษณ์ เช่น ["ผิวสองสี", "ผมสั้นเรียบสีดำ", "รูปร่างปกติ", "เสื้อสีแดง"]
-function describeLook(look) {
+// คำบรรยายรูปลักษณ์ เช่น ["ผิวสองสี", "ผมสั้นเรียบสีดำ", "รูปร่างปกติ", "เสื้อยืดสีแดง", "หมวกแก๊ป"]
+function describeLook(rawLook) {
+  const look = { ...LOOK_DEFAULTS, ...rawLook }; // เซฟเก่าที่ไม่มีช่องใหม่ ใช้ค่าเริ่มต้น
   const options = CONFIG.appearance;
   const nameOf = (list, id) => tr(findById(list, id), 'name');
+  const hairStyle = findById(options.hairStyles, look.hairStyle);
   return [
     nameOf(options.skinTones, look.skin),
-    t('lookHair', nameOf(options.hairStyles, look.hairStyle), nameOf(options.hairColors, look.hairColor)),
+    hairStyle.noColor ? tr(hairStyle, 'name') : t('lookHair', tr(hairStyle, 'name'), nameOf(options.hairColors, look.hairColor)),
     t('lookBody', nameOf(options.bodyTypes, look.body)),
-    t('lookShirt', nameOf(options.shirtColors, look.shirt)),
-    // ของประกอบ (แว่น/หนวดเครา) ใส่เฉพาะที่มี — เซฟเก่าที่ไม่มีช่องนี้ถือว่าไม่มี
-    ...[findById(options.glasses, look.glasses), findById(options.facialHair, look.facialHair)]
+    t('lookOutfit', nameOf(options.outfits, look.outfit), nameOf(options.shirtColors, look.shirt)),
+    // ของประกอบ (หมวก/ของประดับ/แว่น/หนวดเครา) ใส่เฉพาะที่มี
+    ...[findById(options.hats, look.hat), findById(options.accessories, look.accessory),
+      findById(options.glasses, look.glasses), findById(options.facialHair, look.facialHair)]
       .filter(item => item && item.id !== 'none')
       .map(item => tr(item, 'name')),
   ];
@@ -177,31 +180,46 @@ function rollTraitIds() {
 }
 
 // รูปลักษณ์: หยิบจากชุดตัวเลือกสำเร็จรูปมาประกอบกัน (ทรงผมเลือกตามเพศ)
-function rollLook(gender) {
+// รูปลักษณ์: ทรงผมตามเพศ (หัวล้านเฉพาะคนอายุถึง) ชุด หมวก ของประดับ (ของบนหัวใส่คู่หมวกไม่ได้)
+function rollLook(gender, age) {
   const options = CONFIG.appearance;
-  const hairStylesForGender = options.hairStyles.filter(style => style.genders.includes(gender));
+  const forGender = list => list.filter(item => !item.genders || item.genders.includes(gender));
+  const hairStyles = forGender(options.hairStyles).filter(style => !style.minAge || age >= style.minAge);
+  const hat = pickWeighted(options.hats).id;
+  const accessories = forGender(options.accessories).filter(item => hat === 'none' || !item.head);
   return {
     skin: pickWeighted(options.skinTones).id,
-    hairStyle: pickWeighted(hairStylesForGender).id,
+    hairStyle: pickWeighted(hairStyles).id,
     hairColor: pickWeighted(options.hairColors).id,
     body: pickWeighted(options.bodyTypes).id,
     shirt: pickWeighted(options.shirtColors).id,
     glasses: pickWeighted(options.glasses).id,
-    facialHair: pickWeighted(options.facialHair.filter(item => item.genders.includes(gender))).id,
+    facialHair: pickWeighted(forGender(options.facialHair)).id,
+    outfit: pickWeighted(forGender(options.outfits)).id,
+    pants: pickWeighted(options.pantsColors).id,
+    hat,
+    accessory: pickWeighted(accessories).id,
   };
+}
+
+// ค่าเริ่มต้นของช่องรูปลักษณ์ที่เซฟเก่ายังไม่มี (ใส่เสื้อยืด กางเกงยีนส์ ไม่มีหมวก/ของประดับ)
+const LOOK_DEFAULTS = { outfit: 'tshirt', pants: 'jeans', hat: 'none', accessory: 'none', glasses: 'none', facialHair: 'none' };
+function getLook(character) {
+  return { ...LOOK_DEFAULTS, ...character.look };
 }
 
 // สุ่มตัวละคร 1 ตัว (ยังไม่เช็กความสมดุล)
 function rollCharacter() {
   const gender = rollGender();
   const occupation = rollOccupation();
+  const age = rollAge(occupation);
   return {
     gender,
     name: rollName(gender),
-    age: rollAge(occupation),
+    age,
     occupationId: occupation.id,
     traitIds: rollTraitIds(),
-    look: rollLook(gender),
+    look: rollLook(gender, age),
   };
 }
 
@@ -558,7 +576,12 @@ function isValidCharacter(character) {
     && findById(options.bodyTypes, look.body)
     && findById(options.shirtColors, look.shirt)
     && (look.glasses === undefined || findById(options.glasses, look.glasses))
-    && (look.facialHair === undefined || findById(options.facialHair, look.facialHair)),
+    && (look.facialHair === undefined || findById(options.facialHair, look.facialHair))
+    // ช่องที่เพิ่มทีหลัง: เซฟเก่าไม่มีได้ ถ้ามีต้องถูกต้อง
+    && (look.outfit === undefined || findById(options.outfits, look.outfit))
+    && (look.pants === undefined || findById(options.pantsColors, look.pants))
+    && (look.hat === undefined || findById(options.hats, look.hat))
+    && (look.accessory === undefined || findById(options.accessories, look.accessory)),
   );
 }
 
@@ -612,34 +635,37 @@ function buildPortraitPalette(look, gender) {
   };
 }
 
-// วาดแผนที่พิกเซลทีละจุด เริ่มที่แถว startRow
-function drawPixelRows(ctx, rows, palette, startRow) {
-  rows.forEach((row, rowIndex) => {
-    for (let x = 0; x < row.length; x++) {
-      const color = palette[row[x]];
-      if (!color) continue; // '.' = โปร่งใส
-      ctx.fillStyle = color;
-      ctx.fillRect(x, startRow + rowIndex, 1, 1);
+// ใส่เส้นขอบเข้ม K รอบภาพพิกเซล (จุดว่างที่ติดกับจุดที่มีสี ด้านบน/ล่าง/ซ้าย/ขวา) สไตล์ชิบิ
+// pad = ขยายขอบภาพออก 1 จุดก่อน เส้นขอบจะได้ไม่ล้นภาพ ('_' ถือเป็นจุดว่าง)
+function outlineSprite(rows, pad = true) {
+  const margin = pad ? 1 : 0;
+  const cell = (x, y) => {
+    const value = rows[y - margin]?.[x - margin];
+    return value && value !== '.' && value !== '_' ? value : '.';
+  };
+  const height = rows.length + margin * 2;
+  const width = rows[0].length + margin * 2;
+  const result = [];
+  for (let y = 0; y < height; y++) {
+    let line = '';
+    for (let x = 0; x < width; x++) {
+      const value = cell(x, y);
+      const touches = cell(x - 1, y) !== '.' || cell(x + 1, y) !== '.' || cell(x, y - 1) !== '.' || cell(x, y + 1) !== '.';
+      line += value !== '.' ? value : touches ? 'K' : '.';
     }
-  });
+    result.push(line);
+  }
+  return result;
 }
 
-// วาดตัวละครลง canvas: ลำตัว → หน้า → ขนตา/แก้ม (หญิง) → หนวดเครา → ผม → แว่น
+// รูปหน้าตัวละคร 64x64 แบบละเอียด (วาดใน portrait.js แล้วเก็บไว้ วาดหน้าเกมซ้ำไม่ต้องคำนวณใหม่)
 function drawCharacter(canvas, character) {
-  const { look, gender } = character;
-  canvas.width = PORTRAIT_SIZE;
-  canvas.height = PORTRAIT_SIZE;
+  canvas.width = PORTRAIT_RES;
+  canvas.height = PORTRAIT_RES;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, PORTRAIT_SIZE, PORTRAIT_SIZE);
-  const palette = buildPortraitPalette(look, gender);
-  drawPixelRows(ctx, PORTRAIT_BODIES[look.body] ?? PORTRAIT_BODIES.normal, palette, PORTRAIT_BODY_TOP);
-  drawPixelRows(ctx, PORTRAIT_FACE, palette, 0);
-  if (gender === 'female') drawPixelRows(ctx, PORTRAIT_FEMALE_DETAILS, palette, 0);
-  const facialHair = PORTRAIT_FACIAL_HAIR[look.facialHair];
-  if (facialHair) drawPixelRows(ctx, facialHair, palette, 0);
-  drawPixelRows(ctx, PORTRAIT_HAIR[look.hairStyle] ?? PORTRAIT_HAIR.short, palette, 0);
-  if (look.glasses === 'glasses') drawPixelRows(ctx, PORTRAIT_GLASSES, palette, 0);
-  canvas.setAttribute('aria-label', t('spriteLabel', describeLook(look).join(' ')));
+  ctx.clearRect(0, 0, PORTRAIT_RES, PORTRAIT_RES);
+  ctx.drawImage(getPortraitCanvas(character), 0, 0);
+  canvas.setAttribute('aria-label', t('spriteLabel', describeLook(character.look).join(' ')));
 }
 
 // ------------------------------------------------------------
@@ -844,7 +870,33 @@ const SCENE_FPS = 8;                  // ภาพต่อวินาที (�
 const SCENE_EVENT_GAP = [40, 110];    // เหตุการณ์เล็ก ๆ ห่างกันกี่เฟรม (8 เฟรม = 1 วินาที)
 const SMOKE_PUFFS = 10;
 const SMOKE_FLOW = 0.1;               // ก้อนควันเลื่อนขึ้นกี่ช่องต่อเฟรม
-const SCENE_ZOMBIE_WALK = SCENE_ZOMBIES.map((rows, index) => [rows, SCENE_ZOMBIE_STEPS[index]]);
+// ภาพซอมบี้แต่ละแบบใส่เส้นขอบไว้ล่วงหน้าครั้งเดียว (width = ความกว้างรวมเส้นขอบ)
+const ZOMBIE_DRAW = Object.fromEntries(Object.entries(ZOMBIE_SPRITES).map(([kind, sprite]) => [kind, {
+  walk: sprite.walk.map(frame => outlineSprite(frame)),
+  look: sprite.look ? outlineSprite(sprite.look) : null,
+  width: sprite.walk[0][0].length + 2,
+}]));
+
+// เติมสีที่ภาพแบบชิบิต้องใช้เพิ่มจากชุดสีเดิม (ผิวสว่าง ตุ่มหนอง ผม ปาก ฟัน เท้า เส้นขอบ)
+// ตัวบวมผิวออกเหลืองซีด กลางคืนทุกสีมืดลง
+function completeZombiePalette(base, kind, isNight) {
+  const skin = kind === 'bloater' ? mixColors(base.S, '#c8c070', 0.35) : base.S;
+  return {
+    ...base,
+    S: skin,
+    s: kind === 'bloater' ? shadeColor(skin, -0.22) : base.s,
+    l: shadeColor(skin, 0.25),
+    g: mixColors(skin, '#e8e070', 0.55),
+    H: shadeColor(skin, -0.62),
+    r: isNight ? '#5a0e12' : '#8a1a1e',
+    W: isNight ? '#8a8676' : '#d8d0b8',
+    p: shadeColor(base.P, -0.35),
+    K: isNight ? '#05050a' : '#1b1416',
+  };
+}
+
+// ความเร็วเดินของแต่ละแบบ (เทียบกับซอมบี้ธรรมดา)
+const ZOMBIE_SPEED = { walkerA: 1, walkerB: 1, runner: 2.2, bloater: 0.5, screamer: 0, boss: 0.45 };
 
 // สุ่มด้วย Math.random (ใช้กับการขยับที่ไม่ต้องซ้ำเดิม)
 function randomInt(min, max) {
@@ -1026,9 +1078,16 @@ function drawMidBuildings(ctx, random, colors, windows) {
 }
 
 // ตึกแถวริมถนน: หน้าต่างชั้นบน ระเบียง ป้ายร้าน และประตูม้วนที่ปิดตาย (จดหน้าต่างลง windows)
-function drawShophouses(ctx, random, colors, windows) {
+// ราว ๆ กลางภาพคือที่พักของตัวละคร (ตึก 3 ชั้น) คืนตำแหน่งที่พักไว้วาดตัวละคร/ของป้องกัน
+function drawShophouses(ctx, random, colors, windows, isNight) {
+  let shelter = null;
   let x = -randomBetween(random, 0, 12);
   while (x < SCENE_WIDTH) {
+    if (!shelter && x >= SHELTER_FROM_X) {
+      shelter = drawShelter(ctx, colors, x, isNight);
+      x += SHELTER_WIDTH;
+      continue;
+    }
     const width = randomBetween(random, 20, 28);
     const top = SCENE_GROUND - randomBetween(random, 17, 22);
     fillPixels(ctx, colors.shophouse, x, top, width, SCENE_GROUND - top);
@@ -1055,6 +1114,365 @@ function drawShophouses(ctx, random, colors, windows) {
     for (let lineY = doorTop + 1; lineY < doorTop + shutterHeight; lineY += 2) ctx.fillRect(x + 2, lineY, width - 4, 1);
     x += width;
   }
+  return shelter;
+}
+
+// ---------- ที่พัก: ตึกแถว 3 ชั้นที่ตัวละครหลบอยู่ ----------
+const SHELTER_WIDTH = 46;
+const SHELTER_FROM_X = 88; // ที่พักอยู่ราว ๆ กลางภาพ
+
+// ชั้น 3 หน้าต่างเล็ก / ชั้น 2 ห้องที่ตัวละครอยู่ (กลางคืนเปิดไฟ ตัวละครโผล่ที่หน้าต่าง) / ชั้นล่างประตูม้วนปิดตาย
+function drawShelter(ctx, colors, x, isNight) {
+  const top = SCENE_GROUND - 38;
+  const height = SCENE_GROUND - top;
+  fillPixels(ctx, colors.shophouse, x, top, SHELTER_WIDTH, height);
+  fillPixels(ctx, colors.shophouseLight, x, top, SHELTER_WIDTH, 1);
+  fillPixels(ctx, colors.shophouseLight, x, top, 1, height);
+  fillPixels(ctx, colors.shophouseLight, x + SHELTER_WIDTH - 1, top, 1, height);
+  for (const windowX of [x + 6, x + 20, x + 34]) {
+    fillPixels(ctx, colors.shophouseLight, windowX - 1, top + 3, 8, 7);
+    fillPixels(ctx, colors.window, windowX, top + 4, 6, 5);
+  }
+  fillPixels(ctx, colors.shophouseLight, x + 2, top + 10, SHELTER_WIDTH - 4, 1); // ขอบชั้น
+  const win = { x: x + 3, y: top + 11, w: HERO_DRAWN_WIDTH, h: 16 }; // กว้างพอให้เห็นตัวละครครึ่งตัวเต็ม ๆ
+  fillPixels(ctx, colors.shophouseLight, win.x - 1, win.y - 1, win.w + 2, win.h + 2);
+  fillPixels(ctx, isNight ? colors.litWindow : colors.window, win.x, win.y, win.w, win.h);
+  if (isNight) fillPixels(ctx, shadeColor(colors.litWindow, -0.3), win.x, win.y + win.h - 3, win.w, 3); // ขอบหน้าต่างด้านล่างมืดกว่า
+  fillPixels(ctx, colors.shophouseLight, x + 28, top + 13, 15, 12); // หน้าต่างบานที่สอง
+  fillPixels(ctx, colors.window, x + 29, top + 14, 13, 10);
+  fillPixels(ctx, colors.shophouseLight, x + 2, top + 27, SHELTER_WIDTH - 4, 1); // ราวระเบียง
+  const door = { x: x + 8, y: SCENE_GROUND - 10, w: 30, h: 10 };
+  fillPixels(ctx, colors.shutter, door.x, door.y, door.w, door.h);
+  ctx.fillStyle = colors.shutterLine;
+  for (let lineY = door.y + 1; lineY < door.y + door.h; lineY += 2) ctx.fillRect(door.x, lineY, door.w, 1);
+  return { x, top, width: SHELTER_WIDTH, window: win, door, doorX: door.x + Math.floor(door.w / 2) };
+}
+
+// แผ่นไม้หนา 2 จุด ตอกตะปูหัวท้าย (ลากเป็นเส้นตรงทีละจุด)
+function drawPlank(ctx, x0, y0, x1, y1) {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+  for (let i = 0; i <= steps; i++) {
+    const x = Math.round(x0 + ((x1 - x0) * i) / steps);
+    const y = Math.round(y0 + ((y1 - y0) * i) / steps);
+    fillPixels(ctx, '#8a6238', x, y, 1, 2);
+    fillPixels(ctx, '#5e4024', x, y + 2);
+  }
+  fillPixels(ctx, '#c8c0b0', x0, y0);
+  fillPixels(ctx, '#c8c0b0', x1, y1);
+}
+
+// ของป้องกันที่มีในกระเป๋า: แผ่นไม้ตีปิดประตูกับใต้หน้าต่าง / ลวดหนามขึงหน้าที่พัก
+function drawShelterDefenses(ctx, shelter, gear) {
+  if (gear.planks) {
+    const { door } = shelter;
+    drawPlank(ctx, door.x + 1, door.y + 1, door.x + door.w - 2, door.y + door.h - 4);
+    drawPlank(ctx, door.x + 1, door.y + door.h - 4, door.x + door.w - 2, door.y + 1);
+    // หน้าต่างบานที่สองตีไม้ไขว้ (บานที่ตัวละครยืนเว้นไว้ จะได้เห็นตัวละคร)
+    drawPlank(ctx, shelter.x + 29, shelter.top + 14, shelter.x + 40, shelter.top + 21);
+    drawPlank(ctx, shelter.x + 29, shelter.top + 21, shelter.x + 40, shelter.top + 14);
+  }
+  if (gear.wire) {
+    const from = shelter.x - 6;
+    const to = shelter.x + shelter.width + 6;
+    const y = SCENE_GROUND + 1;
+    for (let x = from; x <= to; x += 10) fillPixels(ctx, '#3a3030', x, y - 2, 1, 6); // หลักไม้
+    for (let x = from; x <= to; x++) {
+      fillPixels(ctx, '#8d939b', x, y + [0, 1, 2, 1][((x % 4) + 4) % 4]); // ลวดขดเป็นคลื่น
+      if (x % 3 === 0) fillPixels(ctx, '#c4c8ce', x, y + 3); // หนาม
+    }
+  }
+}
+
+// ไฟฉายกลางคืน: ส่องจากหน้าต่างลงไปที่ถนน
+function drawFlashlightBeam(ctx, shelter, dir) {
+  const win = shelter.window;
+  const startX = dir > 0 ? win.x + win.w - 2 : win.x + 1;
+  const startY = win.y + 9;
+  ctx.fillStyle = 'rgba(255, 232, 150, 0.16)';
+  for (let y = startY; y < SCENE_HEIGHT; y++) {
+    const distance = y - startY;
+    const near = startX + dir * distance * 0.5;
+    const far = startX + dir * (4 + distance * 1.5);
+    ctx.fillRect(Math.round(Math.min(near, far)), y, Math.round(Math.abs(far - near)), 1);
+  }
+}
+
+// ---------- ตัวละครของผู้เล่นในภาพ (ภาพพิกเซลอยู่ใน sprites.js: HERO_*) ----------
+const HERO_FEET_Y = SCENE_HEIGHT - 3; // ตอนเดินอยู่ข้างนอก ยืนหน้าสุดของภาพ
+
+// ชุดสีจากหน้าตาที่สุ่มได้ (ผิว ผม เสื้อ ตา ใช้สีเดียวกับภาพหน้าตัวละคร)
+// สีของตัวละครในภาพประกอบ (ตัวอักษรตรงกับคำอธิบายใน sprites.js) ตามหน้าตาและชุดที่สุ่มได้
+function buildHeroPalette(character) {
+  const look = getLook(character);
+  const options = CONFIG.appearance;
+  const face = buildPortraitPalette(look, character.gender);
+  const outfitColor = face.T;
+  const legColor = { suit: outfitColor, dress: face.S }[look.outfit]
+    ?? findById(options.pantsColors, look.pants)?.color ?? options.pantsColor;
+  const hatColor = findById(options.hats, look.hat)?.color ?? '#6a645e';
+  const female = character.gender === 'female';
+  return {
+    S: face.S, s: face.s, l: mixColors(face.S, '#ffffff', 0.4), E: '#1a1416',
+    m: female ? mixColors(face.S, '#c44a5c', 0.55) : shadeColor(face.S, -0.45),
+    H: face.H, h: shadeColor(face.H, -0.3), j: shadeColor(face.H, 0.22),
+    z: mixColors(face.S, shadeColor(face.H, -0.2), 0.4), // หนวดเคราบาง: สีทึบผสมผิว (วาดแทนสีผิว ห้ามโปร่งแสง)
+    T: outfitColor, t: shadeColor(outfitColor, -0.25), u: mixColors(outfitColor, '#ffffff', 0.3),
+    W: '#e8e4dc', k: look.outfit === 'suit' ? '#9a2a34' : '#2a2224', o: '#d8d0c0',
+    f: hexLuminance(outfitColor) > 0.6 ? '#d0485a' : mixColors(outfitColor, '#f6e8e0', 0.75), y: '#e8c040',
+    P: legColor, F: options.shoeColor,
+    G: '#1c1c22', g: mixColors(face.S, '#d8ecff', 0.45), X: '#141418', R: '#a83232',
+    A: hatColor, a: shadeColor(hatColor, -0.28), r: '#c83a3a',
+    B: '#6b5232', b: '#4e3a22', w: '#4a2e1c', L: '#d8dde2', d: '#b08050', M: '#34343c', O: '#9a9aa2', Y: '#ffe27a',
+    K: '#1a1418', // เส้นขอบ
+  };
+}
+
+// ของที่เห็นบนตัว/ที่พัก: อาวุธที่แรงที่สุด หมวกกันน็อก เป้ ไฟฉาย แผ่นไม้ ลวดหนาม (เสบียงไม่แสดง)
+// กลางคืนที่ไม่ยิงปืน (หรือกระสุนไม่พอ) ถืออาวุธระยะประชิดแทน ถ้ามี
+function getHeroGear() {
+  const items = game.inventory.map(entry => getItem(entry.id));
+  const has = id => items.some(item => item.id === id);
+  const weapons = items.filter(item => item.passive?.weaponPower && HERO_WEAPONS[item.id]);
+  const night = game.phase === 'night' ? game.night : null;
+  const canFire = item => !item.passive.ammoPerNight || !night || (night.useGuns && game.stats.ammo >= item.passive.ammoPerNight);
+  const pool = weapons.some(canFire) ? weapons.filter(canFire) : weapons;
+  const weapon = pool.sort((a, b) => b.passive.weaponPower - a.passive.weaponPower)[0];
+  return {
+    weapon: weapon?.id ?? null,
+    helmet: has('motorcycle_helmet'),
+    backpack: Boolean(game.worn?.bag),
+    flashlight: has('flashlight'),
+    planks: has('wooden_planks'),
+    wire: has('barbed_wire'),
+  };
+}
+
+// ตัวละครอยู่ตรงไหน: เดินค้นของข้างนอก / อยู่ในที่พัก (กลางคืน) / ล้มลง / รอเฮลิคอปเตอร์
+function getHeroMode() {
+  if (game.phase === 'dead') return 'dead';
+  if (game.phase === 'won') return 'won';
+  if (game.phase === 'night' || game.phase === 'summary') return 'window';
+  return 'walk';
+}
+
+// ประกอบภาพตัวละครทีละชั้น คืนตาราง 21x20 ของตัวอักษรสี (ยังไม่มีเส้นขอบ)
+// legs = ท่าขา (stand / stride / pass), weaponShift = ยกอาวุธขึ้นกี่แถว (ตอนอยู่ที่หน้าต่าง), wave = ท่าโบกมือ
+// torso = ลำตัวแบบอื่น (รูปหน้าตัวละครใช้ตามรูปร่าง), '_' ในแผนที่ = ลบจุดเดิม
+function composeHeroContent(look, gear, legs, options = {}) {
+  const grid = Array.from({ length: HERO_HEIGHT }, () => Array(HERO_WIDTH).fill('.'));
+  const paint = (rows, top) => rows.forEach((row, y) => {
+    const target = grid[top + y];
+    if (!target) return;
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] === '_') target[x] = '.';
+      else if (row[x] !== '.') target[x] = row[x];
+    }
+  });
+  const paintPart = part => paint(part.rows, part.top);
+  const outfit = HERO_OUTFITS[look.outfit] ?? HERO_OUTFITS.tshirt;
+  if (gear.backpack) paintPart(HERO_BACKPACK);
+  paint(HERO_LEGS[legs], 18);
+  paint(outfit.torso, 11);
+  if (outfit.skirt) paint(outfit.skirt, 18); // เสื้อโค้ตยาว/ชุดเดรสคลุมขาส่วนบน
+  if (gear.backpack) paintPart(HERO_BACKPACK_STRAP);
+  paintPart(HERO_HEAD);
+  const facialHair = HERO_FACIAL_HAIR[look.facialHair];
+  if (facialHair) paintPart(facialHair);
+  // ใส่หมวก/หมวกกันน็อก: ผมส่วนที่อยู่ใต้หมวกไม่ต้องวาด (ผมตั้ง/มวยไม่โผล่ทะลุหมวก)
+  const headwear = gear.helmet ? HERO_HELMET : HERO_HATS[look.hat];
+  const hair = HERO_HAIR[look.hairStyle] ?? HERO_HAIR.short;
+  const hatBottom = headwear ? headwear.top + headwear.rows.length : -1;
+  paint(hair.rows.map((row, index) => (hair.top + index < hatBottom ? '.'.repeat(row.length) : row)), hair.top);
+  if (headwear) paintPart(headwear);
+  const accessory = HERO_ACCESSORIES[look.accessory];
+  if (accessory && !(gear.helmet && look.accessory !== 'earrings')) paintPart(accessory);
+  if (look.glasses === 'glasses') paintPart(HERO_GLASSES);
+  const weapon = HERO_WEAPONS[gear.weapon];
+  if (weapon) paint(weapon.rows, weapon.top + (options.weaponShift ?? 0));
+  if (gear.flashlight && !options.hideBelt) paintPart(HERO_FLASHLIGHT);
+  if (options.wave != null) paintPart(HERO_WAVE[options.wave]);
+  return grid;
+}
+
+// ภาพตัวละครพร้อมเส้นขอบ (กว้าง 22 สูง 23)
+function composeHero(look, gear, legs, options) {
+  return outlineSprite(composeHeroContent(look, gear, legs, options));
+}
+const HERO_DRAWN_WIDTH = HERO_WIDTH + 2;
+const HERO_DRAWN_HEIGHT = HERO_HEIGHT + 2;
+
+function createHero() {
+  return { mode: null, x: 0, dir: 1, state: 'walk', timer: 0, look: null, palette: null, gear: {}, hurt: false, lying: null };
+}
+
+// อัปเดตตัวละครตามสถานะเกมทุกครั้งที่วาดหน้าเกม (เก็บของ/ใส่ของ/เปลี่ยนช่วง เห็นในภาพทันที)
+function updateSceneHero(model) {
+  const hero = model.hero;
+  hero.look = game.character.look;
+  hero.palette = buildHeroPalette(game.character);
+  hero.gear = getHeroGear();
+  hero.hurt = game.stats.hp <= (game.stats.maxHp * CONFIG.sceneMood.hurtBelowPercent) / 100;
+  const mode = getHeroMode();
+  if (mode === hero.mode) return;
+  hero.mode = mode;
+  if (mode === 'walk') { // เดินออกมาจากประตูที่พัก
+    hero.x = model.shelter.doorX;
+    hero.dir = Math.random() < 0.5 ? -1 : 1;
+    hero.state = 'walk';
+    hero.timer = randomInt(24, 60);
+  }
+  if (mode === 'window') {
+    hero.dir = 1;
+    hero.timer = randomInt(24, 48);
+  }
+  if (mode === 'dead') { // ล้มลงตรงที่อยู่ (กลางคืน: หน้าประตูที่พัก) ซอมบี้ค่อย ๆ เดินมารุม
+    hero.lying = model.isNight || !hero.x
+      ? { x: model.shelter.doorX, y: SCENE_GROUND + 7 }
+      : { x: hero.x, y: HERO_FEET_Y };
+    model.zombies.forEach(zombie => {
+      if (zombie.scream || Math.random() > 0.75) return;
+      zombie.target = hero.lying.x + randomInt(-26, 26);
+      zombie.faceX = hero.lying.x;
+    });
+  }
+  if (mode === 'won') { // ยืนโบกมือ เฮลิคอปเตอร์ค่อย ๆ ลงมารับ
+    hero.x = clamp(hero.x || SCENE_WIDTH / 2, 40, SCENE_WIDTH - 40);
+    hero.dir = 1;
+    model.heli = { x: Math.round(hero.x) - 16, y: -34 };
+  }
+}
+
+function stepHero(model) {
+  const hero = model.hero;
+  if (hero.mode === 'walk') {
+    hero.timer--;
+    if (hero.state === 'walk') {
+      hero.x += hero.dir * (hero.hurt ? 0.3 : 0.6); // บาดเจ็บหนัก: เดินกะเผลกช้าลง
+      if (hero.x < 14 || hero.x > SCENE_WIDTH - 14) {
+        hero.dir *= -1;
+        hero.x = clamp(hero.x, 14, SCENE_WIDTH - 14);
+      }
+    } else if (hero.timer % 12 === 0) {
+      hero.dir *= -1; // หยุดค้นของ หันซ้ายขวามองหา
+    }
+    if (hero.timer <= 0) {
+      if (hero.state === 'walk') {
+        hero.state = 'search';
+        hero.timer = randomInt(16, 40);
+      } else {
+        hero.state = 'walk';
+        hero.timer = randomInt(30, 80);
+      }
+    }
+  } else if (hero.mode === 'window' && --hero.timer <= 0) {
+    hero.dir *= -1; // มองซ้ายทีขวาที เฝ้าระวังนอกหน้าต่าง
+    hero.timer = randomInt(24, 56);
+  }
+  if (model.heli && model.heli.y < 4) model.heli.y += 1;
+}
+
+// ตัวละครข้างนอก (เดิน/ยืนโบกมือ) — ตอนอยู่ที่หน้าต่างและตอนล้มลงมีฟังก์ชันของตัวเอง
+function drawHero(ctx, model) {
+  const hero = model.hero;
+  if (!hero.palette || hero.mode === 'window') return;
+  if (hero.mode === 'dead') {
+    drawHeroLying(ctx, hero);
+    return;
+  }
+  let legs = 'stand';
+  if (hero.mode === 'walk' && hero.state === 'walk') {
+    legs = hero.hurt
+      ? ['pass', 'pass', 'stand', 'stand'][model.frame % 4]
+      : (Math.floor(model.frame / 2) % 2 ? 'pass' : 'stride');
+  }
+  const wave = hero.mode === 'won' ? Math.floor(model.frame / 3) % 2 : null;
+  const rows = composeHero(hero.look, hero.gear, legs, { wave });
+  const left = Math.round(hero.x) - Math.floor(HERO_DRAWN_WIDTH / 2);
+  drawMiniSprite(ctx, rows, hero.palette, left, HERO_FEET_Y - rows.length + 1, hero.dir < 0);
+}
+
+// กลางคืน: เห็นตัวละครครึ่งตัวที่หน้าต่างชั้น 2 ถืออาวุธยกขึ้นพร้อมสู้ (ตัดส่วนที่เกินกรอบหน้าต่าง)
+function drawHeroInWindow(ctx, model) {
+  const hero = model.hero;
+  if (!hero.palette || hero.mode !== 'window') return;
+  const win = model.shelter.window;
+  const rows = composeHero(hero.look, hero.gear, 'stand', { weaponShift: -4, hideBelt: true });
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(win.x, win.y, win.w, win.h);
+  ctx.clip();
+  drawMiniSprite(ctx, rows, hero.palette, win.x, win.y, hero.dir < 0);
+  ctx.restore();
+}
+
+// เสียชีวิต: ภาพตัวละครหมุน 90 องศา (หัวไปทางซ้าย หน้าหงาย) นอนอยู่บนแอ่งเลือด
+function drawHeroLying(ctx, hero) {
+  const grid = composeHero(hero.look, hero.gear, 'stand', { hideBelt: true });
+  const rows = Array.from({ length: HERO_DRAWN_WIDTH }, (_, row) =>
+    Array.from({ length: HERO_DRAWN_HEIGHT }, (_, col) => grid[col][HERO_DRAWN_WIDTH - 1 - row]))
+    .filter(row => row.some(cell => cell !== '.'));
+  const left = Math.round(hero.lying.x) - Math.floor(HERO_DRAWN_HEIGHT / 2);
+  fillPixels(ctx, 'rgba(110, 10, 12, 0.75)', left + 3, hero.lying.y - 1, HERO_DRAWN_HEIGHT - 4, 2);
+  drawMiniSprite(ctx, rows, hero.palette, left, hero.lying.y - rows.length + 1, false);
+}
+
+// รอดครบ 100 วัน: เฮลิคอปเตอร์ (ภาพจากไอคอนพิกเซล ขยาย 2 เท่า) ห้อยบันไดเชือกลงมาหาตัวละคร
+function drawHelicopter(ctx, model) {
+  const heli = model.heli;
+  if (!heli) return;
+  const bob = Math.floor(model.frame / 4) % 2;
+  buildIconGrid('helicopter').forEach((row, y) => row.forEach((color, x) => {
+    if (color) fillPixels(ctx, color, heli.x + x * 2, heli.y + bob + y * 2, 2, 2);
+  }));
+  if (model.frame % 2 === 0) fillPixels(ctx, '#d8d8e0', heli.x - 4, heli.y + bob + 1, 40, 1); // ใบพัดหมุน
+  const ladderX = heli.x + 15;
+  const toY = HERO_FEET_Y - HERO_DRAWN_HEIGHT;
+  for (let y = heli.y + bob + 28; y < toY; y++) {
+    fillPixels(ctx, '#c8b48a', ladderX, y);
+    fillPixels(ctx, '#c8b48a', ladderX + 3, y);
+    if (y % 3 === 0) fillPixels(ctx, '#c8b48a', ladderX + 1, y, 2, 1);
+  }
+}
+
+// ภัยของคืนนั้นเห็นในภาพด้วย (ซอมบี้วิ่งไว / ตัวบวม / ตัวกรีดร้อง / คลื่นซอมบี้ / ยักษ์)
+const THREAT_SCENE_EXTRAS = {
+  runner:   { kind: 'runner', palette: 'specialZombie', speed: 1.3 },
+  bloater:  { kind: 'bloater', palette: 'specialZombie', speed: 0.15 },
+  screamer: { kind: 'screamer', palette: 'specialZombie', scream: true },
+  horde:    { count: 12 },
+  boss:     { kind: 'boss', palette: 'boss', speed: 0.12 },
+};
+
+// ซอมบี้ 1 ตัวในภาพ: kind = แบบ (ZOMBIE_SPRITES), x = ขอบซ้าย, feetY = แถวที่เท้าแตะพื้น, dir = ทิศที่เดิน
+function createSceneZombie(kind, basePalette, isNight, x, feetY, dir) {
+  const walking = Math.random() < 0.6;
+  return {
+    kind, x, feetY, dir,
+    palette: completeZombiePalette(basePalette, kind, isNight),
+    width: ZOMBIE_DRAW[kind].width,
+    speed: (0.22 + Math.random() * 0.2) * ZOMBIE_SPEED[kind],
+    state: walking ? 'walk' : 'idle',
+    timer: walking ? randomInt(24, 72) : randomInt(8, 32),
+    phase: randomInt(0, 3), // ก้าวเท้าไม่พร้อมกันทุกตัว
+  };
+}
+
+function addThreatZombies(zombies, colors, threatId, stage) {
+  const extra = THREAT_SCENE_EXTRAS[threatId];
+  if (!extra || (threatId === 'boss' && stage.boss)) return;
+  const isNight = Boolean(colors.moon);
+  const place = (kind, palette) => createSceneZombie(kind, palette, isNight,
+    randomInt(4, SCENE_WIDTH - ZOMBIE_DRAW[kind].width - 4), randomInt(SCENE_GROUND + 3, SCENE_HEIGHT - 2), Math.random() < 0.5 ? -1 : 1);
+  if (extra.count) {
+    for (let i = 0; i < extra.count; i++) {
+      zombies.push(place(Math.random() < 0.5 ? 'walkerA' : 'walkerB', colors.zombies[randomInt(0, colors.zombies.length - 1)]));
+    }
+    return;
+  }
+  const zombie = place(extra.kind, colors[extra.palette]);
+  if (extra.speed) zombie.speed = extra.speed;
+  if (extra.scream) Object.assign(zombie, { scream: true, state: 'scream', timer: Infinity }); // ยืนกรีดร้องกลางถนนทั้งคืน
+  zombies.push(zombie);
 }
 
 // ไฟหน้าต่างติด ๆ ดับ ๆ: เลือกบานที่เปิดไฟอยู่บางบาน (ดับแวบ/ดับนาน) + บานมืดบางบาน (เปิดไฟแป๊บหนึ่ง)
@@ -1177,33 +1595,41 @@ function drawLampLight(ctx, colors, lamp) {
 // เดินโซเซสลับกับยืนนิ่ง ตัวโตเดินช้ากว่า เดินพ้นขอบภาพแล้ววนกลับมาอีกฝั่ง
 function makeSceneZombies(random, colors, stage, baseCount, bonusPercent) {
   const count = Math.round(baseCount * (1 + bonusPercent / 100));
-  const makeZombie = (palette, scale) => {
-    const x = randomBetween(random, 4, SCENE_WIDTH - 6 * scale - 4);
+  const isNight = Boolean(colors.moon);
+  // kinds = แบบที่สุ่มเลือกได้ (ลำดับการสุ่มเดิม: ขอบซ้าย → ระดับเท้า → แบบ → ทิศ)
+  const makeZombie = (palette, kinds) => {
+    const width = Math.max(...kinds.map(kind => ZOMBIE_DRAW[kind].width));
+    const x = randomBetween(random, 4, SCENE_WIDTH - width - 4);
     const feetY = randomBetween(random, SCENE_GROUND + 3, SCENE_HEIGHT - 2);
-    const variant = randomBetween(random, 0, SCENE_ZOMBIES.length - 1);
-    const mirrored = random() < 0.5;
-    const facing = SCENE_ZOMBIE_FACING[variant];
-    const walking = Math.random() < 0.6;
-    return {
-      x, feetY, variant, palette, scale,
-      dir: mirrored ? -facing : facing,
-      speed: (0.22 + Math.random() * 0.2) * (scale === 1 ? 1 : scale === 2 ? 0.7 : 0.5),
-      state: walking ? 'walk' : 'idle',
-      timer: walking ? randomInt(24, 72) : randomInt(8, 32),
-      phase: randomInt(0, 3), // ก้าวเท้าไม่พร้อมกันทุกตัว
-    };
+    const kind = kinds[randomBetween(random, 0, kinds.length - 1)];
+    const dir = random() < 0.5 ? -1 : 1;
+    return createSceneZombie(kind, palette, isNight, x, feetY, dir);
   };
   const zombies = Array.from({ length: count },
-    () => makeZombie(colors.zombies[randomBetween(random, 0, colors.zombies.length - 1)], 1));
-  for (let i = 0; i < stage.specialZombies; i++) zombies.push(makeZombie(colors.specialZombie, 2));
-  if (stage.boss) zombies.push(makeZombie(colors.boss, 3));
+    () => makeZombie(colors.zombies[randomBetween(random, 0, colors.zombies.length - 1)], ['walkerA', 'walkerB']));
+  // ซอมบี้พิเศษช่วงกลาง/ท้ายเกม: ตัววิ่งไวหรือตัวบวม / ช่วงท้ายมียักษ์
+  for (let i = 0; i < stage.specialZombies; i++) zombies.push(makeZombie(colors.specialZombie, ['runner', 'bloater']));
+  if (stage.boss) zombies.push(makeZombie(colors.boss, ['boss']));
   return zombies.sort((a, b) => a.feetY - b.feetY);
 }
 
-// state: walk = เดิน / idle = ยืนนิ่ง / look = หันมามองจอ
+// state: walk = เดิน / idle = ยืนนิ่ง / look = หันมามองจอ / bang = ทุบประตูหรือรุมตัวละคร
+// target = จุดที่กำลังเดินไปรุม (กลางคืน: หน้าประตูที่พัก / ตอนตัวละครล้มลง: รอบตัวละคร)
 function stepZombie(zombie) {
+  if (zombie.target != null) {
+    const distance = zombie.target - zombie.x;
+    if (Math.abs(distance) > 1) {
+      zombie.dir = Math.sign(distance);
+      zombie.x += zombie.dir * zombie.speed * 1.8; // ได้กลิ่นเหยื่อ เดินเร็วกว่าตอนเดินเตร่
+      zombie.state = 'walk';
+    } else {
+      zombie.state = 'bang';
+      if (zombie.faceX !== zombie.x) zombie.dir = Math.sign(zombie.faceX - zombie.x) || zombie.dir;
+    }
+    return;
+  }
   zombie.timer--;
-  if (zombie.state === 'walk') zombie.x = wrapSceneX(zombie.x + zombie.dir * zombie.speed, 6 * zombie.scale);
+  if (zombie.state === 'walk') zombie.x = wrapSceneX(zombie.x + zombie.dir * zombie.speed, zombie.width);
   if (zombie.timer > 0) return;
   if (zombie.state === 'walk') {
     zombie.state = 'idle';
@@ -1215,16 +1641,27 @@ function stepZombie(zombie) {
   }
 }
 
+// ท่าเดินเปลี่ยนทุกกี่เฟรม: ตัววิ่งไวสลับขาทุกเฟรม ตัวบวม/ยักษ์ก้าวช้า
+const ZOMBIE_STEP_FRAMES = { runner: 1, bloater: 4, boss: 4 };
+
 function drawSceneZombies(ctx, zombies, frame) {
   zombies.forEach(zombie => {
-    let rows = SCENE_ZOMBIE_FRONT;
-    if (zombie.state !== 'look') {
-      const step = zombie.state === 'walk' ? Math.floor((frame + zombie.phase) / (zombie.scale + 1)) % 2 : 0;
-      rows = SCENE_ZOMBIE_WALK[zombie.variant][step];
+    const sprite = ZOMBIE_DRAW[zombie.kind];
+    const cycle = every => Math.floor((frame + zombie.phase) / every) % 2;
+    let rows = sprite.walk[0];
+    if (zombie.scream) rows = sprite.walk[cycle(2)]; // ร้องสลับ 2 ท่า
+    else if (zombie.state === 'look' && sprite.look) rows = sprite.look;
+    else if (zombie.state === 'walk') rows = sprite.walk[cycle(ZOMBIE_STEP_FRAMES[zombie.kind] ?? 2)];
+    else if (zombie.state === 'bang') rows = sprite.walk[cycle(3)]; // โยกตัวทุบประตู
+    const left = Math.round(zombie.x);
+    const top = Math.min(zombie.feetY, SCENE_HEIGHT - 1) - rows.length + 1;
+    const mirrored = zombie.dir < 0 && rows !== sprite.look && !zombie.scream; // ภาพทุกแบบหันขวา
+    drawMiniSprite(ctx, rows, zombie.palette, left, top, mirrored);
+    if (zombie.scream && frame % 6 < 4) { // คลื่นเสียงกรีดร้องสองข้างหัว
+      const ring = frame % 6 < 2 ? 2 : 4;
+      fillPixels(ctx, 'rgba(255, 240, 200, 0.6)', left - ring, top + 3, 1, 4);
+      fillPixels(ctx, 'rgba(255, 240, 200, 0.6)', left + zombie.width - 1 + ring, top + 3, 1, 4);
     }
-    const top = Math.min(zombie.feetY, SCENE_HEIGHT - 1) - rows.length * zombie.scale + 1;
-    const mirrored = zombie.state !== 'look' && zombie.dir !== SCENE_ZOMBIE_FACING[zombie.variant];
-    drawMiniSprite(ctx, rows, zombie.palette, Math.round(zombie.x), top, mirrored, zombie.scale);
   });
 }
 
@@ -1307,8 +1744,8 @@ function startFlock(model) {
 }
 
 function startZombieLook(model) {
-  const candidates = model.zombies.filter(zombie => zombie.state !== 'look'
-    && zombie.x > 0 && zombie.x < SCENE_WIDTH - 6 * zombie.scale);
+  const candidates = model.zombies.filter(zombie => ZOMBIE_DRAW[zombie.kind].look && !zombie.scream
+    && zombie.state !== 'look' && zombie.target == null && zombie.x > 0 && zombie.x < SCENE_WIDTH - zombie.width);
   if (candidates.length === 0) return;
   const zombie = candidates[randomInt(0, candidates.length - 1)];
   zombie.state = 'look';
@@ -1329,7 +1766,8 @@ function runSceneEvents(model) {
 // runSeed = เลขสุ่มประจำเกม: ถนนเดิมทั้งเช้าและกลางคืน แต่ละวัน/แต่ละเกมหน้าตาต่างกัน
 // ซอมบี้สุ่มแยกตามช่วงเวลา กลางคืนจึงมีจำนวนและตำแหน่งต่างจากตอนเช้า
 // (ลำดับการสุ่มต้องเหมือนเดิมทุกครั้ง ภาพวันเดิมจึงออกมาเหมือนเดิม)
-function buildScene(phase, day, runSeed) {
+// threatId = ภัยของคืนนั้น (เฉพาะภาพกลางคืน) ซอมบี้พิเศษของคืนนั้นจะโผล่ในภาพด้วย
+function buildScene(phase, day, runSeed, threatId = null) {
   const colors = SCENE_PALETTES[phase] ?? SCENE_PALETTES.morning;
   const seeded = salt => createSeededRandom(mixSeed(runSeed, day, salt));
   const random = seeded(SEED_SALT.city);
@@ -1357,8 +1795,9 @@ function buildScene(phase, day, runSeed) {
   const smokes = fires.slice(0, 2 + stage.extraFires).map(fire => makeSmoke(random, fire.x, fire.y));
   const shopWindows = { lit: [], dark: [] };
   let lampX = 0;
+  let shelter = null;
   const street = createSceneLayer(ctx => {
-    drawShophouses(ctx, random, colors, shopWindows);
+    shelter = drawShophouses(ctx, random, colors, shopWindows, isNight);
     drawStreet(ctx, random, colors);
     lampX = randomBetween(random, 30, SCENE_WIDTH - 40);
     drawLampPole(ctx, colors, lampX);
@@ -1369,6 +1808,16 @@ function buildScene(phase, day, runSeed) {
   // จำนวนพื้นฐานสุ่มครั้งเดียวต่อวัน (เช้า/กลางคืนใช้ร่วมกัน) ส่วนตำแหน่งสุ่มแยกตามช่วงเวลา
   const baseCount = randomBetween(seeded(SEED_SALT.zombieCount), ...stage.sceneZombies);
   const zombieRandom = seeded(isNight ? SEED_SALT.nightZombies : SEED_SALT.morningZombies);
+  const zombies = makeSceneZombies(zombieRandom, colors, stage, baseCount, isNight ? CONFIG.sceneNightZombieBonus : 0);
+  if (isNight) {
+    addThreatZombies(zombies, colors, threatId, stage);
+    zombies.forEach(zombie => { // กลางคืนส่วนใหญ่เดินมารุมหน้าประตูที่พัก
+      if (zombie.scream || Math.random() > 0.7) return;
+      zombie.target = shelter.doorX + randomInt(-22, 22);
+      zombie.faceX = shelter.doorX;
+    });
+    zombies.sort((a, b) => a.feetY - b.feetY);
+  }
   return {
     colors: { ...colors, fireBright: shadeColor(colors.fireWindow, 0.35), fireDim: shadeColor(colors.fireWindow, -0.3) },
     weatherId: weather.id,
@@ -1382,7 +1831,11 @@ function buildScene(phase, day, runSeed) {
     smokes,
     windows: { mid: makeWindowFlickers(midWindows), shop: makeWindowFlickers(shopWindows), fire: midWindows.fire },
     lamp: { x: lampX, on: true, pattern: [] },
-    zombies: makeSceneZombies(zombieRandom, colors, stage, baseCount, isNight ? CONFIG.sceneNightZombieBonus : 0),
+    isNight,
+    shelter,
+    hero: createHero(),
+    heli: null,
+    zombies,
     rain: makeRain(seeded(SEED_SALT.rain), weather.id),
     fog: makeFog(seeded(SEED_SALT.rain), weather.id),
     bolt: null,
@@ -1408,6 +1861,7 @@ function stepScene(model) {
   model.windows.shop.forEach(stepWindowFlicker);
   stepLamp(model.lamp);
   model.zombies.forEach(stepZombie);
+  stepHero(model);
   model.rain.forEach(stepRain);
   runSceneEvents(model);
   model.flashAlpha = model.flash.shift() ?? 0;
@@ -1431,8 +1885,16 @@ function drawSceneFrame(ctx, model) {
   model.smokes.forEach(points => drawSmoke(ctx, colors, points, frame));
   ctx.drawImage(layers.street, 0, 0);
   drawWindowFlickers(ctx, colors, model.windows.shop);
+  drawHeroInWindow(ctx, model);
+  drawShelterDefenses(ctx, model.shelter, model.hero.gear);
   drawLampLight(ctx, colors, model.lamp);
-  drawSceneZombies(ctx, model.zombies, frame);
+  if (model.hero.mode === 'window' && model.hero.gear.flashlight) drawFlashlightBeam(ctx, model.shelter, model.hero.dir);
+  // ตัวละครแทรกอยู่ระหว่างซอมบี้ตามระยะใกล้-ไกล (ตัวที่ยืนต่ำกว่าวาดทับ)
+  const heroFeetY = model.hero.mode === 'dead' ? model.hero.lying.y : HERO_FEET_Y;
+  drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY <= heroFeetY), frame);
+  drawHero(ctx, model);
+  drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY > heroFeetY), frame);
+  drawHelicopter(ctx, model);
   drawWeatherFront(ctx, model);
   if (model.flashAlpha > 0) fillPixels(ctx, `rgba(225, 228, 255, ${model.flashAlpha})`, 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
 }
@@ -1441,14 +1903,18 @@ function drawSceneFrame(ctx, model) {
 const sceneView = { key: null, model: null, running: false, lastTime: 0 };
 
 function showAnimatedScene(canvas, phase, day, runSeed) {
-  const key = `${phase}:${day}:${runSeed}`;
-  if (sceneView.key !== key) {
+  const threatId = phase === 'night' ? game.night?.threatId ?? null : null;
+  const key = `${phase}:${day}:${runSeed}:${threatId}`;
+  const rebuilt = sceneView.key !== key;
+  if (rebuilt) {
     sceneView.key = key;
-    sceneView.model = buildScene(phase, day, runSeed);
+    sceneView.model = buildScene(phase, day, runSeed, threatId);
     canvas.width = SCENE_WIDTH;
     canvas.height = SCENE_HEIGHT;
-    drawSceneFrame(canvas.getContext('2d'), sceneView.model);
   }
+  updateSceneHero(sceneView.model);
+  // ภาพนิ่ง (ลดการเคลื่อนไหว) หรือเพิ่งสร้างใหม่: วาดทันทีให้เห็นของที่เพิ่งเก็บ/ใส่
+  if (rebuilt || !sceneView.running) drawSceneFrame(canvas.getContext('2d'), sceneView.model);
   startSceneLoop();
 }
 
@@ -3414,21 +3880,47 @@ function validateConfig() {
   }
 
   // แผนที่พิกเซลใน sprites.js ต้องครบทุกตัวเลือก และทุกแถวของภาพเดียวกันยาวเท่ากัน
-  const checkPixelRows = (owner, rows, width = PORTRAIT_SIZE) => rows.forEach((row, index) => {
+  const checkPixelRows = (owner, rows, width = HERO_WIDTH) => rows.forEach((row, index) => {
     if (row.length !== width) errors.push(`sprites.js ${owner} แถวที่ ${index}: ยาว ${row.length} ตัว (ต้อง ${width})`);
   });
-  const checkPortraitMaps = (owner, options, maps) => options.forEach(option => {
+  // ตัวละคร: ทุกส่วนกว้าง HERO_WIDTH / ทรงผม รูปร่าง หนวดเครา ต้องมีภาพครบทุกตัวเลือกใน CONFIG.appearance
+  const checkHeroMaps = (owner, options, maps) => options.forEach(option => {
     if (option.id === 'none') return;
     if (!maps[option.id]) errors.push(`${owner} "${option.id}" ยังไม่มีแผนที่พิกเซลใน sprites.js`);
-    else checkPixelRows(`${owner}.${option.id}`, maps[option.id]);
+    else checkPixelRows(`${owner}.${option.id}`, maps[option.id].rows);
   });
-  checkPixelRows('PORTRAIT_FACE', PORTRAIT_FACE);
-  checkPixelRows('PORTRAIT_FEMALE_DETAILS', PORTRAIT_FEMALE_DETAILS);
-  checkPixelRows('PORTRAIT_GLASSES', PORTRAIT_GLASSES);
-  checkPortraitMaps('PORTRAIT_HAIR', CONFIG.appearance.hairStyles, PORTRAIT_HAIR);
-  checkPortraitMaps('PORTRAIT_BODIES', CONFIG.appearance.bodyTypes, PORTRAIT_BODIES);
-  checkPortraitMaps('PORTRAIT_FACIAL_HAIR', CONFIG.appearance.facialHair, PORTRAIT_FACIAL_HAIR);
-  [['SCENE_CAR', SCENE_CAR], ['SCENE_CONE', SCENE_CONE], ...SCENE_ZOMBIES.map((rows, index) => [`SCENE_ZOMBIES[${index}]`, rows])]
+  Object.entries({ HERO_HEAD, HERO_GLASSES, HERO_HELMET, HERO_BACKPACK, HERO_BACKPACK_STRAP, HERO_FLASHLIGHT })
+    .forEach(([owner, part]) => checkPixelRows(owner, part.rows));
+  Object.entries(HERO_LEGS).forEach(([pose, rows]) => checkPixelRows(`HERO_LEGS.${pose}`, rows));
+  Object.entries(HERO_WEAPONS).forEach(([id, part]) => checkPixelRows(`HERO_WEAPONS.${id}`, part.rows));
+  HERO_WAVE.forEach((part, index) => checkPixelRows(`HERO_WAVE[${index}]`, part.rows));
+  checkHeroMaps('HERO_HAIR', CONFIG.appearance.hairStyles, HERO_HAIR);
+  checkHeroMaps('HERO_FACIAL_HAIR', CONFIG.appearance.facialHair, HERO_FACIAL_HAIR);
+  checkHeroMaps('HERO_HATS', CONFIG.appearance.hats, HERO_HATS);
+  checkHeroMaps('HERO_ACCESSORIES', CONFIG.appearance.accessories, HERO_ACCESSORIES);
+  CONFIG.appearance.outfits.forEach(({ id }) => {
+    const outfit = HERO_OUTFITS[id];
+    if (!outfit) errors.push(`HERO_OUTFITS "${id}" ยังไม่มีแผนที่พิกเซลใน sprites.js`);
+    else checkPixelRows(`HERO_OUTFITS.${id}`, [...outfit.torso, ...(outfit.skirt ?? [])]);
+  });
+  CONFIG.appearance.hats.forEach(({ id, color }) => {
+    if (id !== 'none' && !PORTRAIT_HATS[id]) errors.push(`portrait.js: หมวก "${id}" ยังไม่มีใน PORTRAIT_HATS`);
+    if (id !== 'none' && !color) errors.push(`config.js: หมวก "${id}" ต้องมี color`);
+  });
+  CONFIG.appearance.pantsColors.forEach(({ id, color }) => { if (!color) errors.push(`config.js: สีกางเกง "${id}" ต้องมี color`); });
+  // รูปหน้าแบบละเอียด (portrait.js): ทรงผมกับรูปร่างต้องมีครบ / หนวดเคราวาดได้แค่ stubble กับ beard
+  CONFIG.appearance.hairStyles.forEach(({ id }) => { if (!PORTRAIT_HAIR[id]) errors.push(`portrait.js: ทรงผม "${id}" ยังไม่มีใน PORTRAIT_HAIR`); });
+  CONFIG.appearance.bodyTypes.forEach(({ id }) => { if (!PORTRAIT_BODY_SCALE[id]) errors.push(`portrait.js: รูปร่าง "${id}" ยังไม่มีใน PORTRAIT_BODY_SCALE`); });
+  CONFIG.appearance.facialHair.forEach(({ id }) => {
+    if (!['none', 'stubble', 'beard'].includes(id)) errors.push(`portrait.js: หนวดเครา "${id}" ยังไม่มีวิธีวาด`);
+  });
+  // ซอมบี้: ทุกท่าของแบบเดียวกันกว้างเท่ากัน
+  Object.entries(ZOMBIE_SPRITES).forEach(([kind, sprite]) => {
+    sprite.walk.forEach((rows, index) => checkPixelRows(`ZOMBIE_SPRITES.${kind}.walk[${index}]`, rows, sprite.walk[0][0].length));
+    if (sprite.look) checkPixelRows(`ZOMBIE_SPRITES.${kind}.look`, sprite.look, sprite.walk[0][0].length);
+    if (!(kind in ZOMBIE_SPEED)) errors.push(`ZOMBIE_SPRITES.${kind}: ยังไม่ได้ตั้งความเร็วใน ZOMBIE_SPEED (game.js)`);
+  });
+  [['SCENE_CAR', SCENE_CAR], ['SCENE_CONE', SCENE_CONE]]
     .forEach(([owner, rows]) => checkPixelRows(owner, rows, rows[0].length));
 
   // ของใน items.js
