@@ -29,11 +29,15 @@
         <span class="game-title-sub" data-i18n="titleLine2">รอดซอมบี้</span>
       </h1>
       <p class="title-story" data-i18n-html="titleStory">วิทยุฉุกเฉินประกาศว่าหน่วยกู้ภัยจะมาถึงในอีก 100 วัน<br>จนกว่าจะถึงวันนั้น... ห้ามตาย</p>
-      <div class="title-menu">
-        <button id="btn-continue" class="btn btn-primary" type="button" data-i18n="continueButton" hidden>▶ เล่นต่อ</button>
-        <button id="btn-new-game" class="btn btn-primary" type="button" data-i18n="newGameButton">เริ่มเกมใหม่</button>
-      </div>
-      <p id="title-save-info" class="title-save-info"></p>
+      <!-- มีเกมที่บันทึกไว้ → การ์ดเซฟ (เล่นต่อ / เริ่มเกมใหม่) / ไม่มี → ปุ่ม "เริ่มเกม" (game.js: renderTitle) -->
+      <section class="title-slots">
+        <h2 id="save-heading" class="slots-heading" data-i18n="savedGameHeading" hidden>เกมที่บันทึกไว้</h2>
+        <div id="save-card"></div>
+        <div class="title-menu">
+          <button id="btn-start-game" class="btn btn-primary" type="button" data-i18n="startGameButton">เริ่มเกม</button>
+        </div>
+        <p class="slots-note" data-i18n="saveNote">บันทึกเกมได้ตอนเริ่มวันใหม่ ด้วยปุ่ม "บันทึกและออก"</p>
+      </section>
       <p id="title-best" class="title-best" hidden></p>
       <p class="title-note" data-i18n="titleNote">ทุกเกมใหม่ระบบจะสุ่มตัวละครให้ คุณเลือกเองไม่ได้ ต้องเอาชีวิตรอดด้วยสิ่งที่ได้มา</p>
     </div>
@@ -87,6 +91,8 @@
     <!-- แถบด้านบน: วันที่ + ปุ่มหน้าแรก (ชื่อ อายุ อาชีพ อยู่ในแผงตัวละคร) -->
     <header class="top-bar">
       <div id="topbar-day" class="top-bar-day"></div>
+      <!-- ปุ่มบันทึกโผล่เฉพาะตอนเริ่มวันใหม่ (ช่วงเช้าก่อนทำอะไร) -->
+      <button id="btn-save" class="btn btn-small btn-primary" type="button" data-i18n="saveQuitButton" hidden>บันทึกและออก</button>
       <button id="btn-home" class="btn btn-small" type="button" data-i18n="homeButton">หน้าแรก</button>
     </header>
 
@@ -172,6 +178,9 @@
 
   <!-- แสงแดงกะพริบทั้งจอตอนเสียพลังชีวิต (เล่นด้วย class is-hit ใน game.js) -->
   <div id="hit-flash" class="hit-flash" aria-hidden="true"></div>
+
+  <!-- ข้อความสั้น ๆ ที่โผล่แล้วหายเอง เช่น "บันทึกแล้ว" -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- ===== กล่องยืนยัน ===== -->
   <div id="modal" class="modal" hidden>

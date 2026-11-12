@@ -375,19 +375,45 @@ function findBadStartingStats(character) {
 
 // ------------------------------------------------------------
 // 6) บันทึก/โหลดด้วย localStorage
-//    zombie100.run  = เกมที่กำลังเล่น (ขั้นนี้เก็บตัวละคร ความคืบหน้ารายวันจะเพิ่มในขั้นที่ 6)
-//                     ตายหรือรอดครบแล้วลบทิ้ง = จบถาวร ต้องสุ่มตัวละครใหม่
+//    zombie100.save = เกมที่บันทึกไว้ (มีได้ 1 เกม) { version: 3, savedAt, rev, game }
+//       game = สถานะเกมทั้งหมด (วัน ช่วงของวัน ค่าสถานะ กระเป๋า ของตอนเช้า บันทึกของวัน สถิติ)
+//       ผู้เล่นกด "บันทึกและออก" เอง ได้เฉพาะตอนเริ่มวันใหม่ (ช่วงเช้าก่อนทำอะไร) — ดู canSaveNow
+//       ตายหรือรอดครบแล้วเซฟของเกมนั้นถูกลบ (จบถาวร)
+//       rev = เลขรุ่น เพิ่มทุกครั้งที่บันทึก ใช้รู้ว่าเซฟถูกบันทึกจากแท็บอื่นหลังจากที่แท็บนี้โหลดมาไหม
+//    zombie100.slot1-5 = เซฟรุ่นก่อน (บันทึกอัตโนมัติ) / zombie100.run = เซฟรุ่นเก่ากว่า (มีแค่ตัวละคร)
+//       ย้ายเป็นเซฟแบบใหม่ให้ตอนเปิดเกม (ถ้ายังไม่มีเซฟ) แล้วลบคีย์เก่า
 //    zombie100.best = สถิติดีที่สุดข้ามเกม
 // ------------------------------------------------------------
-const STORAGE_KEY_RUN = 'zombie100.run';
-const SAVE_VERSION = 1;
-let hasWarnedBadSave = false;
+const SAVE_VERSION = 3;
+const STORAGE_KEY_SAVE = 'zombie100.save';
+const STORAGE_KEY_OLD_RUN = 'zombie100.run';
+const OLD_RUN_VERSION = 1;
+const OLD_SLOT_VERSION = 2;
+const OLD_SLOT_KEYS = [1, 2, 3, 4, 5].map(slot => `zombie100.slot${slot}`);
+const GAME_PHASES = ['morning', 'event', 'night', 'summary', 'dead', 'won'];
 
-// seed = เลขสุ่มประจำเกม (ใช้สุ่มภาพเมือง/สภาพอากาศของแต่ละวัน ให้แต่ละเกมไม่เหมือนกัน)
-function saveRun(character, seed) {
-  const data = { version: SAVE_VERSION, status: 'playing', character, seed, savedAt: Date.now() };
+function readStorage(key) {
   try {
-    localStorage.setItem(STORAGE_KEY_RUN, JSON.stringify(data));
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn('[เซฟ] อ่าน localStorage ไม่ได้', error);
+    return null;
+  }
+}
+
+function removeStorage(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.warn('[เซฟ] ลบข้อมูลใน localStorage ไม่ได้', error);
+  }
+}
+
+// บันทึกเกม (สำเร็จ = true)
+function writeSave(state, rev, savedAt = Date.now()) {
+  const data = { version: SAVE_VERSION, savedAt, rev, game: state };
+  try {
+    localStorage.setItem(STORAGE_KEY_SAVE, JSON.stringify(data));
     return true;
   } catch (error) {
     console.warn('[เซฟ] บันทึกลง localStorage ไม่ได้', error);
@@ -395,40 +421,84 @@ function saveRun(character, seed) {
   }
 }
 
-// โหลดเกมที่บันทึกไว้ ถ้าไม่มีหรือข้อมูลเสียจะคืน null
-function loadRun() {
-  let raw = null;
+// อ่านเซฟ → { status: 'empty' } / { status: 'broken' } / { status: 'saved', savedAt, rev, game }
+function loadSave() {
+  const raw = readStorage(STORAGE_KEY_SAVE);
+  if (!raw) return { status: 'empty' };
   try {
-    raw = localStorage.getItem(STORAGE_KEY_RUN);
-  } catch (error) {
-    console.warn('[เซฟ] อ่าน localStorage ไม่ได้', error);
-    return null;
-  }
-  if (!raw) return null;
-  try {
-    const run = JSON.parse(raw);
-    if (isValidRun(run)) return run;
+    const data = JSON.parse(raw);
+    const state = data?.version === SAVE_VERSION ? restoreGame(data.game) : null;
+    if (state && !state.result) {
+      return { status: 'saved', savedAt: data.savedAt, rev: Number.isInteger(data.rev) ? data.rev : 0, game: state };
+    }
   } catch (error) {
     // JSON เสีย: ไปแจ้งเตือนด้านล่าง
   }
-  if (!hasWarnedBadSave) {
-    console.warn('[เซฟ] ข้อมูลเซฟเสียหายหรือไม่ตรงกับ config ปัจจุบัน จึงไม่นำมาใช้');
-    hasWarnedBadSave = true;
-  }
-  return null;
+  console.warn('[เซฟ] เซฟเสียหายหรือไม่ตรงกับ config ปัจจุบัน จึงไม่นำมาใช้');
+  return { status: 'broken' };
 }
 
-// สุ่มเลขประจำเกมใหม่ (จำนวนเต็มบวก 32 บิต)
+function deleteSave() {
+  removeStorage(STORAGE_KEY_SAVE);
+}
+
+// ตรวจเกมที่โหลดมา และเติมช่องที่เซฟรุ่นก่อนยังไม่มี (ใช้ไม่ได้ เช่น id ของหายไปจาก config → null)
+function restoreGame(saved) {
+  if (!saved || typeof saved !== 'object' || !isValidCharacter(saved.character)) return null;
+  if (!GAME_PHASES.includes(saved.phase) || !Number.isInteger(saved.seed)) return null;
+  if (!Number.isInteger(saved.day) || saved.day < 1 || saved.day > CONFIG.totalDays) return null;
+  const base = createGame(saved.character, saved.seed);
+  const state = { ...base, ...saved, stats: { ...base.stats, ...saved.stats }, tally: { ...base.tally, ...saved.tally } };
+  const isNumber = value => typeof value === 'number' && Number.isFinite(value);
+  const isBagEntry = entry => Boolean(entry && getItem(entry.id)) && Number.isInteger(entry.usesLeft);
+  const wornItem = state.worn?.bag ? getItem(state.worn.bag) : null;
+  const checks = [
+    Object.keys(base.stats).every(key => isNumber(state.stats[key])),
+    Array.isArray(state.inventory) && state.inventory.every(isBagEntry),
+    !state.worn?.bag || Boolean(wornItem && isWearable(wornItem)),
+    Array.isArray(state.log) && Array.isArray(state.eventHistory),
+    state.phase !== 'morning' || (Array.isArray(state.morning?.offer) && state.morning.offer.every(id => getItem(id))),
+    state.phase !== 'event' || Boolean(getEvent(state.event?.id)),
+    state.phase !== 'night' || Boolean(getThreat(state.night?.threatId)),
+    !['dead', 'won'].includes(state.phase) || Boolean(state.result),
+    state.phase !== 'dead' || Boolean(state.death),
+  ];
+  return checks.every(Boolean) ? state : null;
+}
+
+// ย้ายเซฟรุ่นก่อนเป็นเซฟแบบใหม่ (ทำเฉพาะตอนยังไม่มีเซฟ) แล้วลบคีย์เก่าทั้งหมด
+//   1) ช่องเซฟบันทึกอัตโนมัติ (zombie100.slot1-5): เอาเกมที่ยังเล่นอยู่และบันทึกล่าสุด (เกมที่จบแล้วทิ้ง)
+//   2) เซฟรุ่นเก่ากว่า (zombie100.run มีแค่ตัวละคร): เริ่มวันที่ 1 ด้วยตัวละครเดิม
+function migrateOldSaves() {
+  let migrated = readStorage(STORAGE_KEY_SAVE) !== null;
+  const candidates = OLD_SLOT_KEYS.map(key => {
+    try {
+      const data = JSON.parse(readStorage(key));
+      const state = data?.version === OLD_SLOT_VERSION && data.status === 'playing' ? restoreGame(data.game) : null;
+      return state && !state.result ? { state, savedAt: Number(data.savedAt) || 0 } : null;
+    } catch (error) {
+      return null;
+    }
+  }).filter(Boolean).sort((a, b) => b.savedAt - a.savedAt);
+  if (!migrated && candidates.length > 0) migrated = writeSave(candidates[0].state, 1, candidates[0].savedAt || Date.now()); // คงเวลาบันทึกเดิม
+  if (!migrated) {
+    try {
+      const run = JSON.parse(readStorage(STORAGE_KEY_OLD_RUN));
+      if (run?.version === OLD_RUN_VERSION && run.status === 'playing' && isValidCharacter(run.character)) {
+        writeSave(createGame(run.character, Number.isInteger(run.seed) ? run.seed : createRunSeed()), 1);
+      }
+    } catch (error) {
+      console.warn('[เซฟ] เซฟรุ่นเก่าเสียหาย จึงไม่นำมาใช้', error);
+    }
+  }
+  [...OLD_SLOT_KEYS, STORAGE_KEY_OLD_RUN].forEach(key => {
+    if (readStorage(key) !== null) removeStorage(key);
+  });
+}
+
+// สุ่มเลขประจำเกมใหม่ (จำนวนเต็มบวก 32 บิต) — ใช้สุ่มภาพเมือง/สภาพอากาศของแต่ละวัน และใช้ระบุว่าเป็นเกมไหน
 function createRunSeed() {
   return Math.floor(Math.random() * 0x100000000) >>> 0;
-}
-
-function clearRun() {
-  try {
-    localStorage.removeItem(STORAGE_KEY_RUN);
-  } catch (error) {
-    console.warn('[เซฟ] ลบเซฟไม่ได้', error);
-  }
 }
 
 // สถิติดีที่สุด (เก็บข้ามเกม) คีย์ zombie100.best:
@@ -470,11 +540,6 @@ function mergeBest(best, dayReached, won) {
     wins: best.wins + (won ? 1 : 0),
     runs: best.runs + 1,
   };
-}
-
-// เซฟใช้ได้ไหม (กันกรณีแก้ config แล้ว id ที่อยู่ในเซฟหายไป)
-function isValidRun(run) {
-  return Boolean(run) && run.version === SAVE_VERSION && run.status === 'playing' && isValidCharacter(run.character);
 }
 
 function isValidCharacter(character) {
@@ -1203,15 +1268,62 @@ function renderEffectBlock(title, desc, mods, icon = null) {
     <div class="chip-list">${renderModChips(mods)}</div>`;
 }
 
-// หน้าแรก: ถ้ามีเซฟจะโชว์ปุ่ม "เล่นต่อ" / เคยเล่นจบแล้วโชว์สถิติดีที่สุด
+// หน้าแรก: มีเกมที่บันทึกไว้ → การ์ดเซฟ (เล่นต่อ / เริ่มเกมใหม่) / ไม่มี → ปุ่ม "เริ่มเกม" ตามปกติ
+// เคยเล่นจบแล้วโชว์สถิติดีที่สุด
 function renderTitle() {
-  const savedRun = loadRun();
-  byId('btn-continue').hidden = !savedRun;
-  byId('btn-new-game').classList.toggle('btn-primary', !savedRun);
-  byId('title-save-info').textContent = savedRun ? t('lastSave', describeCharacter(savedRun.character)) : '';
+  const save = loadSave();
+  const hasSave = save.status === 'saved';
+  byId('save-heading').hidden = !hasSave;
+  byId('save-card').innerHTML = hasSave ? renderSaveCard(save)
+    : save.status === 'broken'
+      ? `<p class="save-broken">${escapeHtml(t('saveBroken'))} <button class="btn btn-small" type="button" data-save-action="delete">${escapeHtml(t('deleteSaveButton'))}</button></p>`
+      : '';
+  byId('btn-start-game').hidden = hasSave;
+  if (hasSave) drawCharacter(byId('save-card').querySelector('canvas'), save.game.character);
   const best = loadBest();
   byId('title-best').hidden = best.runs === 0;
   byId('title-best').innerHTML = iconLabel('trophy', t('bestLine', best.bestDay, best.wins, best.runs));
+}
+
+// ชื่อช่วงของวัน (เซฟรุ่นก่อนอาจค้างอยู่กลางวัน)
+const PHASE_NAME_KEYS = { morning: 'phaseMorning', event: 'phaseEvent', night: 'phaseNight', summary: 'phaseSummary' };
+
+// เวลาที่บันทึก เช่น "12 พ.ย. 2569 14:03" / "12 Nov 2026, 14:03"
+function formatSavedAt(savedAt) {
+  if (!Number.isFinite(savedAt)) return '';
+  return new Date(savedAt).toLocaleString(currentLanguage === 'th' ? 'th-TH' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+// การ์ดเกมที่บันทึกไว้: รูป ชื่อ อายุ/อาชีพ วันที่ เวลาบันทึก + ปุ่มเล่นต่อ / เริ่มเกมใหม่
+function renderSaveCard({ savedAt, game: saved }) {
+  const { character } = saved;
+  const occupation = getOccupation(character.occupationId);
+  const job = t('characterAgeJob', character.age, t('formerJob', getOccupationName(occupation, character.gender)));
+  const button = (action, label, primary) =>
+    `<button class="btn btn-small${primary ? ' btn-primary' : ''}" type="button" data-save-action="${action}">${escapeHtml(label)}</button>`;
+  return `
+    <div class="slot is-playing">
+      <div class="sprite-frame slot-frame"><canvas class="sprite sprite-small" role="img" aria-label="${escapeHtml(getDisplayName(character))}"></canvas></div>
+      <div class="slot-info">
+        <p class="slot-title">${escapeHtml(getDisplayName(character))} <small>${escapeHtml(job)}</small></p>
+        <p class="slot-progress">${escapeHtml(t('slotProgress', saved.day, t(PHASE_NAME_KEYS[saved.phase])))}</p>
+        <p class="slot-time">${escapeHtml(t('slotSavedAt', formatSavedAt(savedAt)))}</p>
+      </div>
+      <div class="slot-actions">${button('continue', t('continueButton'), true)}${button('new', t('newGameButton'), false)}${button('delete', t('deleteSaveButton'), false)}</div>
+    </div>`;
+}
+
+// ปุ่ม "ลบเซฟ": ถามยืนยันก่อน (ลบแล้วกู้คืนไม่ได้) แล้ววาดหน้าแรกใหม่
+function confirmDeleteSave() {
+  const save = loadSave();
+  if (save.status === 'empty') return;
+  const message = save.status === 'saved'
+    ? t('deleteSaveMessage', getDisplayName(save.game.character), save.game.day)
+    : t('deleteBrokenSaveMessage');
+  openConfirm(t('deleteSaveTitle'), message, t('deleteSaveConfirm'), () => {
+    deleteSave();
+    renderTitle();
+  });
 }
 
 // หน้า "คุณถูกสุ่มเกิดเป็น..."
@@ -1303,6 +1415,7 @@ function renderGame() {
 // แถบด้านบน: วันที่ (ชื่อ อายุ อาชีพ แสดงในแผงตัวละคร)
 function renderTopBar() {
   byId('topbar-day').textContent = t('dayCounter', game.day, CONFIG.totalDays);
+  byId('btn-save').hidden = !canSaveNow(); // ปุ่มบันทึกโผล่เฉพาะตอนเริ่มวันใหม่
 }
 
 // แผงค่าสถานะ (หลอด + ตัวเลข) สร้างตามลำดับใน CONFIG.stats
@@ -1686,6 +1799,14 @@ function openConfirm(title, message, confirmText, onConfirm) {
   showModal();
 }
 
+// กล่องแจ้งเตือนที่มีปุ่มเดียว ("ตกลง")
+function openNotice(title, message) {
+  openConfirm(title, message, t('noticeOkButton'), null);
+  byId('modal-cancel').hidden = true;
+  byId('modal-confirm').classList.replace('btn-danger', 'btn-primary'); // แค่รับทราบ ไม่ใช่ปุ่มอันตราย
+  byId('modal-confirm').focus();
+}
+
 function showModal() {
   focusBeforeModal = document.activeElement;
   byId('modal').hidden = false;
@@ -1695,6 +1816,8 @@ function showModal() {
 function closeConfirm() {
   byId('modal').hidden = true;
   byId('modal-confirm').hidden = false;
+  byId('modal-confirm').classList.replace('btn-primary', 'btn-danger');
+  byId('modal-cancel').hidden = false;
   confirmAction = null;
   swapAction = null;
   // คืนโฟกัสให้ปุ่มเดิม (ถ้าปุ่มนั้นยังอยู่ — บางปุ่มถูกวาดใหม่หลังกด)
@@ -1812,8 +1935,11 @@ function applyEffects(effects, cause) {
 }
 
 // ข้อความของผลที่เปลี่ยน เช่น "อาหาร +25, น้ำ −8"
+// ค่าที่ไม่เปลี่ยน (0 เช่น ไม่เหนื่อยอยู่แล้ว) ไม่แสดง ถ้าไม่มีอะไรเปลี่ยนเลยบอกว่า "ไม่มีอะไรเปลี่ยน"
 function formatEffectList(list) {
-  return list.map(([key, changed]) => `${tr(CONFIG.stats[key], 'name')} ${changed === 0 ? '0' : formatSigned(changed)}`).join(', ');
+  const changes = list.filter(([, changed]) => changed !== 0);
+  if (changes.length === 0) return t('effectNoChange');
+  return changes.map(([key, changed]) => `${tr(CONFIG.stats[key], 'name')} ${formatSigned(changed)}`).join(', ');
 }
 
 // โอกาสที่ของเสี่ยงจะให้ผลร้าย (นิสัย/อายุที่มี riskyChance ปรับได้)
@@ -2396,7 +2522,7 @@ function markDead() {
   finishRun(false);
 }
 
-// จบเกมถาวร (ตายหรือรอดครบ): ลบเซฟ ("เล่นต่อ" จะหายไป) แล้วบันทึกสถิติดีที่สุด — ทำครั้งเดียวต่อเกม
+// จบเกมถาวร (ตายหรือรอดครบ): บันทึกสถิติดีที่สุด แล้วช่องเซฟกลายเป็น "จบแล้ว" — ทำครั้งเดียวต่อเกม
 // game.result = { won, dayReached, isNewBest, best } ใช้วาดหน้าสรุป
 function finishRun(won) {
   if (game.result) return;
@@ -2404,7 +2530,9 @@ function finishRun(won) {
   const before = loadBest();
   const best = mergeBest(before, dayReached, won);
   saveBest(best);
-  clearRun();
+  // เกมนี้จบถาวร: ลบเซฟของเกมนี้ (ถ้าบันทึกไว้) จะได้กลับไปเล่นจากวันก่อนตายไม่ได้ — เซฟของเกมอื่นไม่แตะ
+  const save = loadSave();
+  if (save.status === 'saved' && save.game.seed === game.seed) deleteSave();
   game.result = { won, dayReached, isNewBest: dayReached > before.bestDay, best };
 }
 
@@ -2582,6 +2710,8 @@ function renderWornSlot() {
 // ------------------------------------------------------------
 let game = null;            // เกมที่กำลังเล่น { day, phase, seed, character, stats, inventory, ... }
 let revealCharacter = null; // ตัวละครในหน้าสุ่ม (ยังไม่ล็อก กดสุ่มใหม่ได้)
+let loadedSaveRev = null;   // เลขรุ่นของเซฟตอนที่เกมนี้โหลด/บันทึกล่าสุด (null = เกมนี้ยังไม่เคยบันทึก)
+let lastSavedJson = null;   // สถานะเกมตอนโหลด/บันทึกล่าสุด (ไว้ดูว่ามีความคืบหน้าที่ยังไม่ได้บันทึกไหม)
 
 function goToTitle() {
   renderTitle();
@@ -2597,31 +2727,103 @@ function changeLanguage(language) {
   renderSoundButton();
   renderTitle();
   if (revealCharacter) renderReveal(revealCharacter);
-  if (game) renderGame();
-  if (game?.result) renderEnd();
+  if (game && !byId('screen-game').hidden) renderGame();
+  if (game?.result && !byId('screen-end').hidden) renderEnd();
 }
 
-// ปุ่ม "เริ่มเกมใหม่": ถ้ามีเกมค้างอยู่ ถามยืนยันก่อน
-function onNewGameClick() {
-  const savedRun = loadRun();
-  if (!savedRun) {
-    startNewGame();
-    return;
-  }
-  openConfirm(
-    t('newGameConfirmTitle'),
-    t('newGameConfirmMessage', getDisplayName(savedRun.character)),
-    t('newGameConfirmButton'),
-    startNewGame,
-  );
-}
-
-// เริ่มเกมใหม่: สุ่มตัวละครใหม่ (เกม/เซฟเดิมยังอยู่จนกว่าจะกดเริ่มวันที่ 1 จึงถูกเขียนทับ
-// ถ้ากดกลับหน้าหลักก่อน ยังเล่นเกมเดิมต่อได้)
+// เริ่มเกมใหม่: สุ่มตัวละครใหม่ — เกมที่บันทึกไว้ (ถ้ามี) ยังอยู่
+// จนกว่าจะกด "บันทึกและออก" ในเกมใหม่ (ตอนนั้นจะถามยืนยันก่อนทับ)
 function startNewGame() {
   revealCharacter = generateCharacter();
   renderReveal(revealCharacter);
   showScreen('reveal');
+}
+
+// ปุ่ม "เล่นต่อ": โหลดเกมที่บันทึกไว้กลับมาตรงจุดที่บันทึก
+function continueSavedGame() {
+  const save = loadSave();
+  if (save.status !== 'saved') {
+    goToTitle();
+    return;
+  }
+  revealCharacter = null;
+  game = save.game;
+  loadedSaveRev = save.rev;
+  lastSavedJson = JSON.stringify(game);
+  renderGame();
+  showScreen('game');
+}
+
+// บันทึกได้ตอนนี้ไหม: เฉพาะตอนเริ่มวันใหม่ = ช่วงเช้าที่ยังไม่ได้ทำอะไรเลย (ยังไม่เก็บ/ใช้/ทิ้งของ)
+// และเกมยังไม่จบ (ตายหรือรอดครบแล้วบันทึกไม่ได้)
+function canSaveNow() {
+  return Boolean(game) && !game.result && game.phase === 'morning' && game.log.length === 0;
+}
+
+// มีความคืบหน้าที่ยังไม่ได้บันทึกไหม (เกมที่จบแล้วไม่นับ เพราะบันทึกไม่ได้อยู่แล้ว)
+function hasUnsavedProgress() {
+  return Boolean(game) && !game.result && JSON.stringify(game) !== lastSavedJson;
+}
+
+// ปุ่ม "บันทึกและออก": ถ้ามีเซฟของเกมอื่นอยู่ หรือเซฟถูกบันทึกจากแท็บอื่นหลังจากที่เกมนี้โหลดมา → ถามยืนยันก่อนทับ
+function onSaveAndQuit() {
+  if (!canSaveNow()) return;
+  const existing = loadSave();
+  const isAnotherSave = existing.status === 'saved' && (existing.game.seed !== game.seed || existing.rev !== loadedSaveRev);
+  if (!isAnotherSave) {
+    saveAndQuit();
+    return;
+  }
+  openConfirm(
+    t('overwriteSaveTitle'),
+    t('overwriteSaveMessage', getDisplayName(existing.game.character), existing.game.day),
+    t('overwriteSaveButton'),
+    saveAndQuit,
+  );
+}
+
+function saveAndQuit() {
+  if (!canSaveNow()) return;
+  const existing = loadSave();
+  const rev = (existing.status === 'saved' ? existing.rev : 0) + 1;
+  if (!writeSave(game, rev)) {
+    openNotice(t('saveFailedTitle'), t('saveFailedMessage'));
+    return;
+  }
+  leaveGame();
+  showToast(t('savedToast'));
+}
+
+// ปุ่ม "หน้าแรก" ระหว่างเล่น: ยังมีความคืบหน้าที่ไม่ได้บันทึก → ถามก่อน (ออกแล้วความคืบหน้านั้นหาย)
+function onHomeClick() {
+  if (!hasUnsavedProgress()) {
+    leaveGame();
+    return;
+  }
+  openConfirm(t('leaveGameTitle'), t('leaveGameMessage'), t('leaveGameButton'), leaveGame);
+}
+
+// ออกจากเกมกลับหน้าแรก (เกมที่ไม่ได้บันทึกถูกทิ้ง เล่นต่อได้จากเซฟเท่านั้น)
+function leaveGame() {
+  game = null;
+  loadedSaveRev = null;
+  lastSavedJson = null;
+  goToTitle();
+}
+
+// ข้อความสั้น ๆ ที่โผล่แล้วหายเอง เช่น "บันทึกแล้ว"
+let toastTimer = null;
+function showToast(text) {
+  const toast = byId('toast');
+  toast.textContent = text;
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.hidden = true; }, 2500);
+}
+
+// แท็บอื่นบันทึก/ลบเซฟ → ถ้าเปิดหน้าแรกอยู่ วาดการ์ดเซฟใหม่
+function onStorageChanged(event) {
+  if (event.key === STORAGE_KEY_SAVE && !byId('screen-title').hidden) renderTitle();
 }
 
 // ปุ่ม "สุ่มใหม่": ใช้ได้เฉพาะหน้าเปิดตัวละคร ก่อนเริ่มวันที่ 1 เท่านั้น
@@ -2635,47 +2837,25 @@ function rerollCharacter() {
   return true;
 }
 
-// ปุ่ม "กลับหน้าหลัก" ในหน้าสุ่ม: ทิ้งตัวละครที่ยังไม่ล็อก แล้วกลับหน้าแรก (เซฟเดิมไม่หาย)
+// ปุ่ม "กลับหน้าหลัก" ในหน้าสุ่ม: ทิ้งตัวละครที่ยังไม่ล็อก แล้วกลับหน้าแรก (เซฟไม่เปลี่ยน)
 function backFromReveal() {
   revealCharacter = null;
   goToTitle();
 }
 
-// ยืนยันตัวละคร → ล็อก บันทึก แล้วเริ่มวันที่ 1
+// ยืนยันตัวละคร → ล็อก แล้วเริ่มวันที่ 1 (ยังไม่บันทึก — บันทึกได้ด้วยปุ่ม "บันทึกและออก" ตอนเริ่มวัน)
 function startDayOne() {
   if (!revealCharacter) return;
   const character = revealCharacter;
   revealCharacter = null; // จากนี้ไปสุ่มใหม่ไม่ได้แล้ว
-  const seed = createRunSeed();
-  saveRun(character, seed);
-  game = createGame(character, seed);
+  game = createGame(character, createRunSeed());
+  loadedSaveRev = null;
+  lastSavedJson = null;
   renderGame();
   showScreen('game');
 }
 
-// ปุ่ม "เล่นต่อ": ถ้าเกมเดิมยังเปิดค้างอยู่ (กดหน้าแรกแล้วกลับมา) เล่นต่อจากเดิมเลย
-// ไม่งั้นโหลดตัวละครจากเซฟ (หลังรีเฟรชหน้าจะเริ่มวันที่ 1 ใหม่ — เซฟความคืบหน้าจริงในขั้นที่ 6)
-function continueGame() {
-  const savedRun = loadRun();
-  if (!savedRun) {
-    goToTitle();
-    return;
-  }
-  revealCharacter = null;
-  if (!game || game.seed !== savedRun.seed) {
-    let seed = savedRun.seed;
-    if (!Number.isInteger(seed)) { // เซฟรุ่นก่อนยังไม่มีเลขสุ่มประจำเกม → สุ่มให้แล้วเซฟเพิ่ม
-      seed = createRunSeed();
-      saveRun(savedRun.character, seed);
-    }
-    game = createGame(savedRun.character, seed);
-  }
-  renderGame();
-  showScreen('game');
-}
-
-// สร้างข้อมูลเกมวันที่ 1 จากตัวละคร
-// (ขั้นนี้ยังไม่เซฟความคืบหน้ารายวัน: เล่นต่อหลังรีเฟรชจะได้กระเป๋า/ของตอนเช้าใหม่ — เซฟจริงในขั้นที่ 6)
+// สร้างข้อมูลเกมวันที่ 1 จากตัวละคร (โหลดเซฟก็ใช้เป็นค่าตั้งต้นของช่องที่เซฟรุ่นก่อนยังไม่มี)
 function createGame(character, seed) {
   const inventory = (getOccupation(character.occupationId).startItems ?? []).map(id => createBagItem(id));
   const stats = calcStartingStats(character);
@@ -2849,6 +3029,7 @@ function validateConfig() {
   Object.entries(CONFIG.dayEnd).forEach(([key, value]) => {
     if (!(typeof value === 'number' && value >= 0)) errors.push(`dayEnd.${key} ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป`);
   });
+
 
   // ข้อความปิดท้ายตอนตาย: ช่วงแรกต้องเริ่มวันที่ 1 และเรียงวันจากน้อยไปมาก
   const deathEndings = CONFIG.endings.died;
@@ -3027,17 +3208,25 @@ function startMusicOnGesture(event) {
 // 11) ผูกปุ่ม แล้วเริ่มที่หน้าแรก
 // ------------------------------------------------------------
 function bindEvents() {
-  byId('btn-new-game').addEventListener('click', onNewGameClick);
-  byId('btn-continue').addEventListener('click', continueGame);
+  // หน้าแรก: ปุ่ม "เริ่มเกม" (ไม่มีเซฟ) และปุ่มในการ์ดเซฟ (สร้างใหม่ทุกครั้งที่วาด จึงดักที่กล่องแม่)
+  byId('btn-start-game').addEventListener('click', startNewGame);
+  byId('save-card').addEventListener('click', event => {
+    const action = event.target.closest('button[data-save-action]')?.dataset.saveAction;
+    if (action === 'continue') continueSavedGame();
+    if (action === 'new') startNewGame();
+    if (action === 'delete') confirmDeleteSave();
+  });
   byId('btn-reroll').addEventListener('click', rerollCharacter);
   byId('btn-reveal-back').addEventListener('click', backFromReveal);
   byId('btn-start-day').addEventListener('click', startDayOne);
-  byId('btn-home').addEventListener('click', goToTitle);
-  byId('btn-end-home').addEventListener('click', goToTitle);
-  byId('btn-end-new-game').addEventListener('click', onNewGameClick);
+  byId('btn-save').addEventListener('click', onSaveAndQuit);
+  byId('btn-home').addEventListener('click', onHomeClick);
+  byId('btn-end-home').addEventListener('click', leaveGame);
+  byId('btn-end-new-game').addEventListener('click', startNewGame);
   byId('sound-toggle').addEventListener('click', onSoundToggle);
   document.addEventListener('click', startMusicOnGesture);
   document.addEventListener('keydown', startMusicOnGesture);
+  window.addEventListener('storage', onStorageChanged); // แท็บอื่นบันทึก/ลบเซฟ
   document.querySelectorAll('[data-language]').forEach(button => {
     button.addEventListener('click', () => changeLanguage(button.dataset.language));
   });
@@ -3094,6 +3283,7 @@ function bindEvents() {
 
 function init() {
   validateConfig();
+  migrateOldSaves(); // เซฟรุ่นก่อน (บันทึกอัตโนมัติ / มีแค่ตัวละคร) → เซฟแบบใหม่
   byId('favicon').href = iconUrl('zombie'); // ไอคอนแท็บเป็นซอมบี้พิกเซล
   bindEvents();
   applyStaticTexts();

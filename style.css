@@ -93,6 +93,7 @@ h1, h2, h3, h4 { line-height: 1.3; }
 /* ภาพตัวละครครึ่งตัว 32x32 ขยายเป็นจำนวนเท่าเพื่อให้พิกเซลเท่ากันทุกจุด */
 .sprite-large  { width: 160px; height: 160px; }
 .sprite-medium { width: 96px;  height: 96px; }
+.sprite-small  { width: 64px;  height: 64px; }
 
 .sprite-frame {
   flex: none;
@@ -170,7 +171,7 @@ h1, h2, h3, h4 { line-height: 1.3; }
 .lang-btn:hover { color: var(--text); background: var(--panel-raised); }
 .lang-btn[aria-pressed="true"] { color: #1c0f07; background: var(--accent); }
 .lang-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.title-card { max-width: 560px; text-align: center; }
+.title-card { width: 100%; max-width: 560px; text-align: center; } /* กว้างเต็มที่ ช่องเซฟจะได้ไม่แคบ */
 .title-kicker { color: var(--muted); letter-spacing: 0.06em; font-size: 0.95rem; }
 .game-title {
   margin: 0.2em 0 0.35em;
@@ -185,9 +186,57 @@ h1, h2, h3, h4 { line-height: 1.3; }
   text-shadow: 4px 4px 0 #000, 0 0 24px rgba(181, 48, 43, 0.45);
 }
 .title-story { color: var(--text-soft); margin-bottom: 28px; }
-.title-menu { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* ช่องเซฟ 3 ช่องบนหน้าแรก */
+.title-slots { text-align: left; }
+.slots-heading { text-align: center; font-size: 0.9rem; color: var(--muted); letter-spacing: 0.06em; margin-bottom: 8px; }
+.slot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+.slot.is-playing { border-color: #6b4a2a; }
+.slot.is-won { border-color: #4b6630; }
+.slot.is-dead { border-color: #5a2a28; }
+.slot.is-dead .sprite { filter: grayscale(1) brightness(0.7); } /* ตายแล้วภาพหม่น เหมือนหน้าสรุป */
+.slot.is-broken .slot-title { color: var(--bad); }
+.slot-frame { padding: 3px; }
+.slot-portrait-empty { flex: none; width: 70px; height: 70px; border: 2px dashed var(--border); }
+.slot-info { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.slot-label { font-size: 0.75rem; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+.slot-title { font-weight: 700; color: #f3e9d8; }
+.slot-title small { display: block; font-weight: 400; font-size: 0.85rem; color: var(--text-soft); }
+.slot-progress { font-size: 0.9rem; color: var(--accent); font-weight: 600; }
+.slot.is-won .slot-progress { color: var(--good); }
+.slot.is-dead .slot-progress { color: var(--bad); }
+.slot-time { font-size: 0.75rem; color: var(--muted); }
+.slot-actions { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.slots-note { margin-top: 8px; text-align: center; color: var(--muted); font-size: 0.8rem; }
+
+/* ปุ่ม "เริ่มเกม" (ตอนยังไม่มีเกมที่บันทึกไว้) และข้อความเซฟเสีย */
+.title-menu { display: flex; justify-content: center; }
 .title-menu .btn { min-width: 220px; font-size: 1.1rem; }
-.title-save-info { margin-top: 14px; min-height: 1.6em; color: var(--muted); font-size: 0.9rem; }
+.save-broken { margin-bottom: 10px; text-align: center; color: var(--bad); font-size: 0.9rem; }
+
+/* ข้อความสั้น ๆ ที่โผล่แล้วหายเอง เช่น "บันทึกแล้ว" (กลางจอด้านบน) */
+.toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  font-weight: 700;
+  color: #1c0f07;
+  background: var(--good);
+  border: 2px solid #4b6630;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+  animation: pop-in 0.25s ease-out;
+}
 .title-note { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
 
 /* ---------- หน้าเปิดตัวละคร ---------- */
@@ -278,6 +327,7 @@ h1, h2, h3, h4 { line-height: 1.3; }
   background: rgba(13, 11, 9, 0.95);
   border-bottom: 2px solid var(--border);
 }
+.top-bar #btn-save { margin-left: auto; } /* ปุ่มบันทึกอยู่ชิดปุ่มหน้าแรกทางขวา */
 .top-bar-day { font-weight: 700; color: var(--accent); white-space: nowrap; font-size: 1.05rem; }
 
 /* จอกว้าง: 3 แผงซ้ายเรียงลงมา แผงช่วงของวันกินความสูงทั้งคอลัมน์ขวา
@@ -669,4 +719,10 @@ img.item-icon { width: 32px; height: 32px; image-rendering: pixelated; }
   .top-bar { gap: 10px; padding: 8px 62px 8px 12px; }
   .top-bar-day { font-size: 0.95rem; }
   .top-bar .btn-small { padding: 0.3em 0.6em; }
+  /* หน้าแรกบนจอเล็ก: เว้นที่ด้านบนให้ปุ่มเลือกภาษา/ลำโพง ไม่ให้บังข้อความบรรทัดแรก */
+  .screen-title { padding-top: 64px; }
+  /* ช่องเซฟบนจอเล็ก: ปุ่มลงไปอยู่แถวล่าง เต็มความกว้าง */
+  .slot { flex-wrap: wrap; }
+  .slot-actions { flex-direction: row; width: 100%; }
+  .slot-actions .btn { flex: 1; }
 }
