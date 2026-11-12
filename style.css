@@ -369,6 +369,7 @@ h1, h2, h3, h4 { line-height: 1.3; }
 .stat-bar { height: 12px; background: #0b0a08; border: 2px solid var(--border); }
 .stat-fill { height: 100%; background: var(--stat-color); transition: width 0.4s ease; }
 .stat.is-critical .stat-value { color: var(--bad); font-weight: 700; }
+.stat-note { color: var(--muted); font-size: 0.78rem; } /* เช่น กระสุน (ยังไม่มีปืน) */
 .stat.is-critical .stat-bar { border-color: #8f2f2a; animation: critical-blink 1s steps(2) infinite; }
 @keyframes critical-blink { 50% { border-color: var(--bad); } }
 

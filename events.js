@@ -12,7 +12,7 @@
 //    label (+ en)  ข้อความบนปุ่ม
 //    cost          ผลที่เกิดทันทีเมื่อเลือก เช่น { food: -15 } (ค่าที่ต้องจ่ายต้องมีพอ ไม่งั้นเลือกไม่ได้)
 //    give          ต้องยกของชิ้นใดชิ้นหนึ่งในรายการให้ เช่น ['bandage', 'first_aid']
-//    requires      'weapon' = ต้องมีอาวุธในกระเป๋า
+//    requires      'weapon' = ต้องมีอาวุธในกระเป๋า / 'gun' = ต้องมีปืนในกระเป๋า
 //    check+chance  ต้องลุ้น: chance = % สำเร็จพื้นฐาน, check = นิสัยที่มีผล
 //                    friendly  = +โอกาสผู้รอดชีวิตเป็นมิตร   scam = −โอกาสถูกหลอก
 //                    emergency = −โอกาสพลาดในเหตุฉุกเฉิน      luck = +โอกาสเจอของหายาก
@@ -41,7 +41,7 @@ const EVENTS = [
     choices: [
       {
         label: 'เอาอาหารแลกกระสุน', en: { label: 'Trade food for ammo' },
-        cost: { food: -15 }, check: 'scam', chance: 70,
+        cost: { food: -15 }, requires: 'gun', check: 'scam', chance: 70, // ไม่มีปืน แลกมาก็ไม่ได้ใช้
         success: { effects: { ammo: 8 }, text: 'เขานับกระสุนใส่มือคุณครบทุกนัด', en: { text: 'He counts every round into your hand.' } },
         fail: { effects: { stress: 10 }, text: 'กล่องที่ได้มามีแต่ปลอกกระสุนเปล่า และเขาหายไปแล้ว', en: { text: 'The box holds only empty casings, and he is already gone.' } },
       },

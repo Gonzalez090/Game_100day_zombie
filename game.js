@@ -1802,10 +1802,12 @@ function renderStats() {
     const percent = max > 0 ? clamp(Math.round((value / max) * 100), 0, 100) : 0;
     const critical = isStatCritical(key, value);
     const name = escapeHtml(tr(def, 'name'));
+    // กระสุนตอนยังไม่มีปืน: เก็บไว้ได้ แต่ยังยิงไม่ได้
+    const note = key === 'ammo' && !hasGun() ? ` <small class="stat-note">(${escapeHtml(t('statNoGun'))})</small>` : '';
     return `
       <li class="stat stat-${key}${critical ? ' is-critical' : ''}" data-stat="${key}">
         <div class="stat-head">
-          <span class="stat-name">${iconHtml(def.icon)} ${name}</span>
+          <span class="stat-name">${iconHtml(def.icon)} ${name}${note}</span>
           <span class="stat-value">${value} / ${max}</span>
         </div>
         <div class="stat-bar" role="progressbar" aria-label="${name}"
@@ -2429,11 +2431,18 @@ function isItemUseful(item) {
   });
 }
 
+// กด "ใช้" ไม่ได้เพราะอะไร (null = ใช้ได้): ต้องมีปืนก่อน (กล่องกระสุน) / ค่าเต็มอยู่แล้ว ใช้ไปก็เสียของเปล่า
+function getItemUseBlock(item) {
+  if (item.requires === 'gun' && !hasGun()) return { button: 'noGunButton', hint: 'noGunHint' };
+  if (!isItemUseful(item)) return { button: 'notNeededButton', hint: 'notNeededHint' };
+  return null;
+}
+
 // กด "ใช้": ได้ผลทันที ของเสี่ยงสุ่มผลร้าย ใช้หมดแล้วหายจากกระเป๋า
 function useItem(index) {
   const entry = game.inventory[index];
   const item = getItem(entry.id);
-  if (!item.use || !isItemUseful(item) || !isPlayable()) return;
+  if (!item.use || getItemUseBlock(item) || !isPlayable()) return;
   const hpBefore = game.stats.hp;
   const ref = { item: item.id };
   addLog('logUsed', ref, applyEffects(item.use));
@@ -2636,6 +2645,11 @@ function hasWeapon() {
   return game.inventory.some(entry => getItem(entry.id).passive?.weaponPower);
 }
 
+// มีปืนในกระเป๋าไหม (ปืน = ของที่ใช้กระสุนตอนกลางคืน) ไม่มีปืน กระสุนก็ยังใช้ไม่ได้
+function hasGun() {
+  return game.inventory.some(entry => getItem(entry.id).passive?.ammoPerNight);
+}
+
 // เลือกทางนี้ได้ไหม: คืนเหตุผลที่เลือกไม่ได้ (null = เลือกได้)
 //   ค่าที่ต้องจ่าย (อาหาร/น้ำ/กระสุน) ต้องมีพอ, ของที่ต้องให้ต้องมีในกระเป๋า, ทางที่ต้องสู้ต้องมีอาวุธ
 function getChoiceBlock(choice) {
@@ -2648,6 +2662,7 @@ function getChoiceBlock(choice) {
     return t('eventNeedItem', choice.give.map(id => tr(getItem(id), 'name')).join(t('orJoin')));
   }
   if (choice.requires === 'weapon' && !hasWeapon()) return t('eventNeedWeapon');
+  if (choice.requires === 'gun' && !hasGun()) return t('eventNeedGun');
   return null;
 }
 
@@ -3068,6 +3083,7 @@ function renderItemChips(item) {
     const info = ITEM_PASSIVE_INFO[key];
     chips.push(chip(info.better === 'up' ? value > 0 : value < 0, `${tr(info, 'name')} ${formatSigned(value)}${info.unit ?? ''}`));
   });
+  if (item.requires === 'gun') chips.push(`<span class="chip chip-neutral">${iconLabel('pistol', t('needsGunChip'))}</span>`);
   if (item.risk) {
     const effects = Object.entries(item.risk.effects).map(([key, value]) => `${tr(CONFIG.stats[key], 'name')} ${formatSigned(value)}`).join(', ');
     chips.push(`<span class="chip chip-risk">${iconLabel('warning', t('riskChip', getRiskChance(item), tr(item, 'riskText'), effects))}</span>`);
@@ -3111,9 +3127,10 @@ function renderBag() {
     const item = getItem(entry.id);
     const leftText = usesLeftText(item, entry);
     const left = leftText ? ` <small>(${escapeHtml(leftText)})</small>` : '';
+    const blocked = getItemUseBlock(item);
     const useButton = !item.use ? ''
-      : isItemUseful(item) ? `<button class="btn btn-small btn-primary" type="button" data-action="use" data-index="${index}">${escapeHtml(t('useButton'))}</button>`
-      : `<button class="btn btn-small" type="button" disabled title="${escapeHtml(t('notNeededHint'))}">${escapeHtml(t('notNeededButton'))}</button>`;
+      : !blocked ? `<button class="btn btn-small btn-primary" type="button" data-action="use" data-index="${index}">${escapeHtml(t('useButton'))}</button>`
+      : `<button class="btn btn-small" type="button" disabled title="${escapeHtml(t(blocked.hint))}">${escapeHtml(t(blocked.button))}</button>`;
     const discardButton = `<button class="btn btn-small" type="button" data-action="discard" data-index="${index}">${escapeHtml(t('discardButton'))}</button>`;
     return `
       <li class="bag-item rarity-${item.rarity}" title="${escapeHtml(tr(item, 'desc'))}">
@@ -3430,6 +3447,7 @@ function validateConfig() {
     if (item.risk && !item.riskText) errors.push(`items.js ${item.id}: ของเสี่ยงต้องมี riskText`);
     if (item.wear && !ITEM_WEAR_SLOTS[item.wear]) errors.push(`items.js ${item.id}: ไม่รู้จักช่องสวมใส่ "${item.wear}" (ต้องมีใน ITEM_WEAR_SLOTS)`);
     if (item.wear && item.use) errors.push(`items.js ${item.id}: ของสวมใส่ต้องไม่มี use (ใส่แล้วติดตัว ไม่ใช่ของกดใช้)`);
+    if (item.requires && item.requires !== 'gun') errors.push(`items.js ${item.id}: ไม่รู้จัก requires "${item.requires}"`);
   });
   if (new Set(ITEMS.map(item => item.id)).size !== ITEMS.length) errors.push('items.js: มี id ซ้ำกัน');
   CONFIG.occupations.forEach(job => (job.startItems ?? []).forEach(id => {
@@ -3511,7 +3529,7 @@ function validateConfig() {
       if (choice.check && !choice.fail) errors.push(`${where}: ทางที่ต้องลุ้นต้องมี fail`);
       if (!choice.check && choice.fail) errors.push(`${where}: มี fail แต่ไม่มี check (จะไม่มีวันพลาด)`);
       if (!choice.success) errors.push(`${where}: ต้องมี success`);
-      if (choice.requires && choice.requires !== 'weapon') errors.push(`${where}: ไม่รู้จัก requires "${choice.requires}"`);
+      if (choice.requires && !['weapon', 'gun'].includes(choice.requires)) errors.push(`${where}: ไม่รู้จัก requires "${choice.requires}"`);
       [...(choice.give ?? []), ...(choice.success?.items ?? []), ...(choice.fail?.items ?? [])].forEach(id => {
         if (!getItem(id)) errors.push(`${where}: ไม่มีของ "${id}" ใน items.js`);
       });
