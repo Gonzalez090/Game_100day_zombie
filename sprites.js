@@ -436,6 +436,56 @@ const SCENE_ZOMBIES = [
   ],
 ];
 
+// ท่าก้าวเท้า (สลับกับท่าปกติด้านบนตอนเดิน): ตัวยุบลง 1 จุด ขาสองข้างเดินสวนกัน
+const SCENE_ZOMBIE_STEPS = [
+  [
+    '......',
+    '..SSs.',
+    '.SESs.',
+    '..Ss..',
+    '.CCSSS',
+    '.CCcSs',
+    '.CCc..',
+    '.CCc..',
+    '.PPP..',
+    '.P.P..',
+    '.P.P..',
+    '.PP.PP',
+  ],
+  [
+    '......',
+    '...SS.',
+    '..SESs',
+    '...Ss.',
+    '..CCC.',
+    '.SCCCc',
+    '.S.CCc',
+    '...CCc',
+    '..PPP.',
+    '..P.P.',
+    '..P.P.',
+    '.PPPP.',
+  ],
+];
+// ซอมบี้ท่าปกติหันไปทางไหน (1 = ขวา, -1 = ซ้าย) ใช้ให้เดินไปทางที่หน้าหัน
+const SCENE_ZOMBIE_FACING = [1, -1];
+
+// ซอมบี้หันหน้ามามองจอ (เหตุการณ์เล็ก ๆ ในภาพ)
+const SCENE_ZOMBIE_FRONT = [
+  '.SSSS.',
+  '.ESSE.',
+  '.SssS.',
+  '..SS..',
+  'CCCCCC',
+  'SCCCCS',
+  'SCCcCS',
+  '.CCcC.',
+  '.PPPP.',
+  '.P..P.',
+  '.P..P.',
+  'PP..PP',
+];
+
 const SCENE_CAR = [
   '........KKKKKKKK........',
   '.......KwwwKKwwwK.......',

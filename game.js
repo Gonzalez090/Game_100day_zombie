@@ -643,7 +643,7 @@ function drawCharacter(canvas, character) {
 }
 
 // ------------------------------------------------------------
-// 7.1) ภาพประกอบช่วงของวัน — วาดภาพพิกเซลเมืองร้างลง canvas (ใช้แทนรูปจริงไปก่อน)
+// 7.1) ภาพประกอบช่วงของวัน — วาดภาพพิกเซลเมืองร้างลง canvas แบบเคลื่อนไหว (ใช้แทนรูปจริงไปก่อน)
 //      ถ้าใส่ path รูปไว้ใน CONFIG.sceneImages จะแสดงรูปนั้นแทน
 // ------------------------------------------------------------
 const SCENE_WIDTH = 240;
@@ -835,86 +835,141 @@ function drawSun(ctx, colors) {
   fillPixelCircle(ctx, x - 2, y - 2, 6, colors.sunCore);
 }
 
-// แสงบนฟ้า: เช้า = ดวงอาทิตย์ / กลางคืน = ดาวกับพระจันทร์
+// ------------------------------------------------------------
+// ภาพเคลื่อนไหว: ส่วนที่ไม่ขยับ (ฟ้า ตึก ถนน) วาดครั้งเดียวเป็นชั้น ๆ เก็บไว้
+// ส่วนที่ขยับ (ดาว เมฆ อีกา ไฟหน้าต่าง ควัน ไฟถนน ซอมบี้ ฝน หมอก) วาดใหม่ทุกเฟรม
+// ตำแหน่งตั้งต้นยังสุ่มจากเลขประจำเกม+วัน ภาพวันเดิมจึงหน้าตาเดิม ส่วนการขยับใช้ Math.random (มีผลแค่ภาพ)
+// ------------------------------------------------------------
+const SCENE_FPS = 8;                  // ภาพต่อวินาที (ขยับทีละเฟรมแบบเกมพิกเซล)
+const SCENE_EVENT_GAP = [40, 110];    // เหตุการณ์เล็ก ๆ ห่างกันกี่เฟรม (8 เฟรม = 1 วินาที)
+const SMOKE_PUFFS = 10;
+const SMOKE_FLOW = 0.1;               // ก้อนควันเลื่อนขึ้นกี่ช่องต่อเฟรม
+const SCENE_ZOMBIE_WALK = SCENE_ZOMBIES.map((rows, index) => [rows, SCENE_ZOMBIE_STEPS[index]]);
+
+// สุ่มด้วย Math.random (ใช้กับการขยับที่ไม่ต้องซ้ำเดิม)
+function randomInt(min, max) {
+  return randomBetween(Math.random, min, max);
+}
+
+// ของที่เลื่อนพ้นขอบขวาให้กลับมาเข้าทางซ้าย (และกลับกัน) width = ความกว้างของสิ่งนั้น
+function wrapSceneX(x, width) {
+  const span = SCENE_WIDTH + width * 2;
+  return ((((x + width) % span) + span) % span) - width;
+}
+
+// สร้างชั้นภาพนิ่งขนาดเท่าภาพจริง (พื้นโปร่งใส) แล้ววาดลงไปทันที
+function createSceneLayer(draw) {
+  const layer = document.createElement('canvas');
+  layer.width = SCENE_WIDTH;
+  layer.height = SCENE_HEIGHT;
+  draw(layer.getContext('2d'));
+  return layer;
+}
+
+// ---------- ท้องฟ้า ----------
+// ดาวกลางคืน: บางดวงกะพริบหรี่ลงแวบหนึ่ง
 // random เป็นตัวสุ่มแยก ตึกจะได้ตำแหน่งเดิมทั้งเช้าและกลางคืน
-function drawSkyLight(ctx, colors, random) {
-  if (!colors.moon) {
-    drawSun(ctx, colors);
-    return;
-  }
-  for (let i = 0; i < 45; i++) fillPixels(ctx, colors.star, randomBetween(random, 0, SCENE_WIDTH - 1), randomBetween(random, 0, 40));
+function makeStars(random) {
+  return Array.from({ length: 45 }, () => ({
+    x: randomBetween(random, 0, SCENE_WIDTH - 1),
+    y: randomBetween(random, 0, 40),
+    dim: 0, // เหลืออีกกี่เฟรมที่หรี่อยู่
+  }));
+}
+
+function drawStars(ctx, colors, stars) {
+  stars.forEach(star => {
+    ctx.globalAlpha = star.dim > 0 ? 0.3 : 1;
+    fillPixels(ctx, colors.star, star.x, star.y);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// พระจันทร์มีแสงเรือง (วาดทับดาว)
+function drawMoon(ctx, colors) {
   fillPixelCircle(ctx, 60, 20, 15, colors.moonGlow[0]);
   fillPixelCircle(ctx, 60, 20, 11, colors.moonGlow[1]);
   fillPixelCircle(ctx, 60, 20, 7, colors.moonShade);
   fillPixelCircle(ctx, 58, 19, 6, colors.moon);
 }
 
-// สภาพอากาศชั้นหลัง (วาดก่อนตึก): ฟ้าครึ้มมีเมฆหนาบังฟ้า
-function drawWeatherBack(ctx, random, colors, weatherId) {
-  if (weatherId !== 'cloudy' && weatherId !== 'rain') return;
-  fillPixels(ctx, 'rgba(40, 36, 52, 0.35)', 0, 0, SCENE_WIDTH, SCENE_GROUND);
-  for (let i = 0; i < 7; i++) {
-    const y = randomBetween(random, 0, 26);
-    const x = randomBetween(random, -30, SCENE_WIDTH - 20);
-    const length = randomBetween(random, 40, 90);
-    fillPixels(ctx, colors.cloud[0], x, y, length, 3);
-    fillPixels(ctx, colors.cloud[1], x + 6, y + 3, length - 12, 1);
-  }
-}
-
-// สภาพอากาศชั้นหน้า (วาดทับทุกอย่าง): สายฝน / หมอก
-function drawWeatherFront(ctx, random, weatherId) {
-  if (weatherId === 'rain') {
-    fillPixels(ctx, 'rgba(20, 24, 40, 0.25)', 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
-    for (let i = 0; i < 170; i++) {
-      const x = randomBetween(random, 0, SCENE_WIDTH);
-      const y = randomBetween(random, 0, SCENE_HEIGHT);
-      fillPixels(ctx, 'rgba(170, 190, 230, 0.45)', x, y, 1, 3);
-      fillPixels(ctx, 'rgba(170, 190, 230, 0.3)', x - 1, y + 3, 1, 2);
-    }
-  }
-  if (weatherId === 'fog') {
-    // หมอกจางทั้งภาพ + หนาที่สุดตรงแนวพื้นถนน แล้วค่อย ๆ จางขึ้นบน/ลงล่าง
-    fillPixels(ctx, 'rgba(165, 160, 175, 0.18)', 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
-    for (let y = SCENE_GROUND - 36; y < SCENE_HEIGHT; y++) {
-      const thickness = 1 - Math.abs(y - SCENE_GROUND) / 36;
-      fillPixels(ctx, `rgba(190, 185, 200, ${(0.42 * Math.max(0, thickness)).toFixed(3)})`, 0, y, SCENE_WIDTH, 1);
-    }
-    for (let i = 0; i < 9; i++) { // ก้อนหมอกลอยเป็นริ้ว
-      const y = randomBetween(random, SCENE_GROUND - 30, SCENE_HEIGHT - 6);
-      fillPixels(ctx, 'rgba(210, 205, 220, 0.16)', randomBetween(random, -40, SCENE_WIDTH - 40), y, randomBetween(random, 50, 110), 3);
-    }
-  }
-}
-
-// เมฆเป็นริ้วยาว ท้องเมฆโดนแดดเช้า
-function drawClouds(ctx, random, colors) {
-  for (let i = 0; i < 5; i++) {
+// เมฆเป็นริ้วยาว ท้องเมฆโดนแดดเช้า ลอยไปทางขวาช้า ๆ (ก้อนที่อยู่สูงลอยเร็วกว่านิดหน่อย)
+function makeClouds(random) {
+  return Array.from({ length: 5 }, () => {
     const length = randomBetween(random, 18, 48);
     const left = randomBetween(random, -10, SCENE_WIDTH - 20);
     const y = randomBetween(random, 6, 34);
+    const tail = random() < 0.5;
+    return { length, left, y, tail, speed: 0.16 - y * 0.003 };
+  });
+}
+
+function drawClouds(ctx, colors, clouds, frame) {
+  clouds.forEach(cloud => {
+    const { length, y } = cloud;
+    const left = Math.round(wrapSceneX(cloud.left + cloud.speed * frame, length + 2));
     fillPixels(ctx, colors.cloud[0], left + 6, y - 1, Math.floor(length * 0.55), 1);
     fillPixels(ctx, colors.cloud[1], left, y, length, 1);
     fillPixels(ctx, colors.cloud[2], left + 3, y + 1, Math.floor(length * 0.8), 1);
-    if (random() < 0.5) fillPixels(ctx, colors.cloud[1], left + length - 6, y - 1, 8, 1);
-  }
+    if (cloud.tail) fillPixels(ctx, colors.cloud[1], left + length - 6, y - 1, 8, 1);
+  });
 }
 
-// อีกาบินเป็นรูปตัว v เล็ก ๆ
-function drawCrows(ctx, random, colors) {
-  for (let i = 0; i < 4; i++) {
+// ฟ้าครึ้ม/ฝนตก: ฟ้าหม่น + เมฆหนาเป็นแถบ ๆ (ชั้นหลัง วาดก่อนตึก) เลื่อนช้า ๆ
+function makeOvercast(random, weatherId) {
+  if (weatherId !== 'cloudy' && weatherId !== 'rain') return [];
+  return Array.from({ length: 7 }, () => {
+    const y = randomBetween(random, 0, 26);
+    const x = randomBetween(random, -30, SCENE_WIDTH - 20);
+    const length = randomBetween(random, 40, 90);
+    return { x, y, length, speed: 0.05 + (y % 3) * 0.02 };
+  });
+}
+
+function drawOvercast(ctx, colors, strips, frame) {
+  if (strips.length === 0) return;
+  fillPixels(ctx, 'rgba(40, 36, 52, 0.35)', 0, 0, SCENE_WIDTH, SCENE_GROUND);
+  strips.forEach(strip => {
+    const x = Math.round(wrapSceneX(strip.x + strip.speed * frame, strip.length));
+    fillPixels(ctx, colors.cloud[0], x, strip.y, strip.length, 3);
+    fillPixels(ctx, colors.cloud[1], x + 6, strip.y + 3, strip.length - 12, 1);
+  });
+}
+
+// ฟ้าแลบ: สายฟ้าซิกแซกหลังตึก (เส้นขาวต่อกันเป็นสาย + แสงเรืองรอบ ๆ)
+function drawBolt(ctx, bolt) {
+  bolt.points.forEach(point => fillPixels(ctx, 'rgba(200, 190, 255, 0.35)', point.x - 1, point.y - 1, 3, 5));
+  bolt.points.forEach((point, index) => {
+    fillPixels(ctx, '#f4f0ff', point.x, point.y, 1, 3);
+    const next = bolt.points[index + 1];
+    if (next && next.x !== point.x) fillPixels(ctx, '#f4f0ff', Math.min(point.x, next.x), point.y + 2, Math.abs(next.x - point.x) + 1, 1);
+  });
+}
+
+// อีกา: ปีกยก = ตัว v / ปีกลง = ตัว ^ (ตัวใหญ่มีปลายปีกเพิ่มข้างละจุด)
+function makeCrows(random) {
+  return Array.from({ length: 4 }, () => {
     const x = randomBetween(random, 20, SCENE_WIDTH - 20);
     const y = randomBetween(random, 8, 26);
-    fillPixels(ctx, colors.crow, x, y);
-    fillPixels(ctx, colors.crow, x + 1, y + 1);
-    fillPixels(ctx, colors.crow, x + 2, y);
-    if (random() < 0.5) {
-      fillPixels(ctx, colors.crow, x - 1, y - 1);
-      fillPixels(ctx, colors.crow, x + 3, y - 1);
-    }
-  }
+    const big = random() < 0.5;
+    return { x, y, big, dir: Math.random() < 0.5 ? -1 : 1, speed: 0.25 + Math.random() * 0.3, flap: randomInt(0, 3) };
+  });
 }
 
+function drawCrow(ctx, color, x, y, wingsUp, big) {
+  const points = wingsUp ? [[0, 0], [1, 1], [2, 0]] : [[0, 1], [1, 0], [2, 1]];
+  if (big) points.push(...(wingsUp ? [[-1, -1], [3, -1]] : [[-1, 2], [3, 2]]));
+  points.forEach(([dx, dy]) => fillPixels(ctx, color, x + dx, y + dy));
+}
+
+function drawCrows(ctx, colors, crows, frame) {
+  crows.forEach(crow => {
+    const wingsUp = Math.floor((frame + crow.flap) / 2) % 2 === 0;
+    drawCrow(ctx, colors.crow, Math.round(crow.x), crow.y, wingsUp, crow.big);
+  });
+}
+
+// ---------- ตึก ----------
 // ตึกสูงไกล ๆ สีจางกลืนกับฟ้า มีเสาอากาศและเครนก่อสร้างที่ทิ้งค้าง
 function drawFarSkyline(ctx, random, colors) {
   let x = -randomBetween(random, 0, 8);
@@ -935,20 +990,9 @@ function drawFarSkyline(ctx, random, colors) {
   fillPixels(ctx, colors.farAccent, craneX + 17, craneTop + 10, 3, 2); // ตะขอ
 }
 
-// ควันลอยจากตึกที่ไหม้ (เอียงไปทางขวาตามลม)
-function drawSmoke(ctx, random, colors, originX, originY) {
-  let x = originX;
-  let y = originY;
-  for (let puff = 0; puff < 10; puff++) {
-    fillPixelCircle(ctx, x, y, 2 + Math.floor(puff / 2), colors.smoke[puff % 2]);
-    x += randomBetween(random, 2, 4);
-    y -= randomBetween(random, 3, 5);
-  }
-}
-
 // ตึกชั้นกลาง: หน้าต่างดับ/ติดไฟ/ไฟไหม้ มีถังน้ำและเสาอากาศบนหลังคา
-// คืนตำแหน่งหลังคาตึกที่ไฟไหม้ไว้ใช้วาดควัน
-function drawMidBuildings(ctx, random, colors) {
+// จดตำแหน่งหน้าต่างลง windows (ไว้ทำไฟกะพริบ) และคืนตำแหน่งหลังคาตึกที่ไฟไหม้ไว้ใช้วาดควัน
+function drawMidBuildings(ctx, random, colors, windows) {
   const fires = [];
   let x = -randomBetween(random, 0, 10);
   while (x < SCENE_WIDTH) {
@@ -960,9 +1004,10 @@ function drawMidBuildings(ctx, random, colors) {
     for (let windowY = top + 3; windowY < SCENE_GROUND - 3; windowY += 5) {
       for (let windowX = x + 3; windowX < x + width - 3; windowX += 4) {
         const roll = random();
-        const color = roll < 0.03 ? colors.fireWindow : roll < 0.2 ? colors.litWindow : colors.window;
-        if (color === colors.fireWindow) onFire = true;
-        fillPixels(ctx, color, windowX, windowY, 2, 3);
+        const kind = roll < 0.03 ? 'fire' : roll < 0.2 ? 'lit' : 'dark';
+        if (kind === 'fire') onFire = true;
+        fillPixels(ctx, { fire: colors.fireWindow, lit: colors.litWindow, dark: colors.window }[kind], windowX, windowY, 2, 3);
+        windows[kind].push({ x: windowX, y: windowY, w: 2, h: 3 });
       }
     }
     if (random() < 0.4) { // ถังน้ำบนหลังคา
@@ -980,8 +1025,8 @@ function drawMidBuildings(ctx, random, colors) {
   return fires;
 }
 
-// ตึกแถวริมถนน: หน้าต่างชั้นบน ระเบียง ป้ายร้าน และประตูม้วนที่ปิดตาย
-function drawShophouses(ctx, random, colors) {
+// ตึกแถวริมถนน: หน้าต่างชั้นบน ระเบียง ป้ายร้าน และประตูม้วนที่ปิดตาย (จดหน้าต่างลง windows)
+function drawShophouses(ctx, random, colors, windows) {
   let x = -randomBetween(random, 0, 12);
   while (x < SCENE_WIDTH) {
     const width = randomBetween(random, 20, 28);
@@ -991,7 +1036,9 @@ function drawShophouses(ctx, random, colors) {
     fillPixels(ctx, colors.shophouseLight, x, top, width, 1);
     for (const windowX of [x + 4, x + width - 9]) { // หน้าต่างชั้นบน 2 บาน
       fillPixels(ctx, colors.shophouseLight, windowX - 1, top + 2, 6, 6);
-      fillPixels(ctx, random() < 0.25 ? colors.litWindow : colors.window, windowX, top + 3, 4, 4);
+      const lit = random() < 0.25;
+      fillPixels(ctx, lit ? colors.litWindow : colors.window, windowX, top + 3, 4, 4);
+      windows[lit ? 'lit' : 'dark'].push({ x: windowX, y: top + 3, w: 4, h: 4 });
     }
     fillPixels(ctx, colors.shophouseLight, x + 2, top + 8, width - 4, 1); // ราวระเบียง
     const signColor = colors.signs[randomBetween(random, 0, colors.signs.length - 1)];
@@ -1010,6 +1057,77 @@ function drawShophouses(ctx, random, colors) {
   }
 }
 
+// ไฟหน้าต่างติด ๆ ดับ ๆ: เลือกบานที่เปิดไฟอยู่บางบาน (ดับแวบ/ดับนาน) + บานมืดบางบาน (เปิดไฟแป๊บหนึ่ง)
+function makeWindowFlickers(windows) {
+  const pick = (list, count) => [...list].sort(() => Math.random() - 0.5).slice(0, count);
+  return [
+    ...pick(windows.lit, 6).map(spot => ({ ...spot, lit: true, toggled: 0 })),
+    ...pick(windows.dark, 4).map(spot => ({ ...spot, lit: false, toggled: 0 })),
+  ];
+}
+
+// toggled = เหลืออีกกี่เฟรมที่บานนี้สลับจากปกติ (ติด → ดับ / ดับ → ติด)
+function stepWindowFlicker(spot) {
+  if (spot.toggled > 0) {
+    spot.toggled--;
+    return;
+  }
+  const roll = Math.random();
+  if (spot.lit && roll < 0.012) spot.toggled = randomInt(1, 4);         // ไฟตกแวบเดียว
+  else if (spot.lit && roll < 0.014) spot.toggled = randomInt(20, 60);  // ปิดไฟไปพักหนึ่ง
+  else if (!spot.lit && roll < 0.004) spot.toggled = randomInt(16, 48); // มีคนเปิดไฟแป๊บหนึ่ง
+}
+
+function drawWindowFlickers(ctx, colors, spots) {
+  spots.forEach(spot => {
+    if (spot.toggled > 0) fillPixels(ctx, spot.lit ? colors.window : colors.litWindow, spot.x, spot.y, spot.w, spot.h);
+  });
+}
+
+// หน้าต่างที่ไฟไหม้: สีไฟเปลี่ยนทุกเฟรม + เปลวไฟเลียขอบหน้าต่างด้านบน
+function drawFireWindows(ctx, colors, spots) {
+  spots.forEach(spot => {
+    const roll = Math.random();
+    const color = roll < 0.35 ? colors.fireBright : roll < 0.6 ? colors.fireDim : colors.fireWindow;
+    fillPixels(ctx, color, spot.x, spot.y, spot.w, spot.h);
+    if (Math.random() < 0.55) fillPixels(ctx, colors.fireBright, spot.x + randomInt(0, spot.w - 1), spot.y - 1);
+  });
+}
+
+// ควันลอยจากตึกที่ไหม้ (เอียงไปทางขวาตามลม): สุ่มเส้นทางไว้ แล้วให้ก้อนควันไหลขึ้นตามเส้นทางทีละนิด
+function makeSmoke(random, originX, originY) {
+  const points = [];
+  let x = originX;
+  let y = originY;
+  for (let puff = 0; puff < SMOKE_PUFFS; puff++) {
+    points.push({ x, y });
+    x += randomBetween(random, 2, 4);
+    y -= randomBetween(random, 3, 5);
+  }
+  points.push({ x, y }); // ปลายทาง: ก้อนบนสุดค่อย ๆ จางหายตรงนี้
+  return points;
+}
+
+function drawSmoke(ctx, colors, points, frame) {
+  const flow = frame * SMOKE_FLOW;
+  const shift = flow % 1;
+  const cycle = Math.floor(flow);
+  for (let i = 0; i < SMOKE_PUFFS; i++) {
+    const position = i + shift;
+    const index = Math.floor(position);
+    const blend = position - index;
+    const from = points[index];
+    const to = points[index + 1];
+    // ก้อนล่างสุดค่อย ๆ โผล่ ก้อนบนสุดค่อย ๆ จาง
+    ctx.globalAlpha = position < 1 ? position : position > SMOKE_PUFFS - 2 ? (SMOKE_PUFFS - position) / 2 : 1;
+    const color = colors.smoke[(((i - cycle) % 2) + 2) % 2]; // สีติดไปกับก้อนเดิมตอนเลื่อน
+    fillPixelCircle(ctx, Math.round(from.x + (to.x - from.x) * blend), Math.round(from.y + (to.y - from.y) * blend),
+      2 + Math.floor(position / 2), color);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---------- ถนน ----------
 // ทางเท้า ขอบถนน และถนนที่มีรอยแตก
 function drawStreet(ctx, random, colors) {
   fillPixels(ctx, colors.sidewalk, 0, SCENE_GROUND, SCENE_WIDTH, 4);
@@ -1030,74 +1148,331 @@ function drawStreet(ctx, random, colors) {
   }
 }
 
-// เสาไฟริมทาง (หัวโคมงอ ไฟยังติดอยู่ดวงเดียว)
-function drawLamp(ctx, colors, x) {
+// เสาไฟริมทาง (หัวโคมงอ) อยู่ในชั้นนิ่ง ส่วนแสงไฟวาดทุกเฟรม
+function drawLampPole(ctx, colors, x) {
   fillPixels(ctx, colors.lampPole, x, SCENE_GROUND - 24, 1, 27);
   fillPixels(ctx, colors.lampPole, x + 1, SCENE_GROUND - 25, 4, 1);
   fillPixels(ctx, colors.lampPole, x + 5, SCENE_GROUND - 24, 1, 1);
-  fillPixelCircle(ctx, x + 5, SCENE_GROUND - 22, 3, colors.lampGlow);
-  fillPixels(ctx, colors.lampLight, x + 4, SCENE_GROUND - 23, 3, 1);
 }
 
-// ซอมบี้บนทางเท้าและถนน จำนวนตามช่วงความยาก + ซอมบี้พิเศษตัวโต + บอส (วาดตัวไกลก่อน ตัวใกล้ทับทีหลัง)
+// ไฟใกล้เสีย: นาน ๆ ทีจะกะพริบติด ๆ ดับ ๆ เป็นชุด (pattern = ติด/ดับของเฟรมถัด ๆ ไป)
+function stepLamp(lamp) {
+  if (lamp.pattern.length > 0) {
+    lamp.on = lamp.pattern.shift();
+    return;
+  }
+  lamp.on = true;
+  if (Math.random() < 0.025) lamp.pattern = Array.from({ length: randomInt(3, 8) }, () => Math.random() < 0.4);
+}
+
+function drawLampLight(ctx, colors, lamp) {
+  if (!lamp.on) return;
+  fillPixelCircle(ctx, lamp.x + 5, SCENE_GROUND - 22, 3, colors.lampGlow);
+  fillPixels(ctx, colors.lampLight, lamp.x + 4, SCENE_GROUND - 23, 3, 1);
+}
+
+// ---------- ซอมบี้ ----------
+// ซอมบี้บนทางเท้าและถนน จำนวนตามช่วงความยาก + ซอมบี้พิเศษตัวโต + บอส (เรียงตัวไกลก่อน ตัวใกล้วาดทับทีหลัง)
 // baseCount = จำนวนซอมบี้ธรรมดาของวันนั้น, bonusPercent = เพิ่มกี่ % (ตอนกลางคืน จึงมากกว่าตอนเช้าเสมอ)
-function drawSceneZombies(ctx, random, colors, stage, baseCount, bonusPercent) {
+// เดินโซเซสลับกับยืนนิ่ง ตัวโตเดินช้ากว่า เดินพ้นขอบภาพแล้ววนกลับมาอีกฝั่ง
+function makeSceneZombies(random, colors, stage, baseCount, bonusPercent) {
   const count = Math.round(baseCount * (1 + bonusPercent / 100));
-  const makeZombie = (palette, scale) => ({
-    x: randomBetween(random, 4, SCENE_WIDTH - 6 * scale - 4),
-    feetY: randomBetween(random, SCENE_GROUND + 3, SCENE_HEIGHT - 2),
-    variant: randomBetween(random, 0, SCENE_ZOMBIES.length - 1),
-    palette,
-    scale,
-    mirrored: random() < 0.5,
-  });
+  const makeZombie = (palette, scale) => {
+    const x = randomBetween(random, 4, SCENE_WIDTH - 6 * scale - 4);
+    const feetY = randomBetween(random, SCENE_GROUND + 3, SCENE_HEIGHT - 2);
+    const variant = randomBetween(random, 0, SCENE_ZOMBIES.length - 1);
+    const mirrored = random() < 0.5;
+    const facing = SCENE_ZOMBIE_FACING[variant];
+    const walking = Math.random() < 0.6;
+    return {
+      x, feetY, variant, palette, scale,
+      dir: mirrored ? -facing : facing,
+      speed: (0.22 + Math.random() * 0.2) * (scale === 1 ? 1 : scale === 2 ? 0.7 : 0.5),
+      state: walking ? 'walk' : 'idle',
+      timer: walking ? randomInt(24, 72) : randomInt(8, 32),
+      phase: randomInt(0, 3), // ก้าวเท้าไม่พร้อมกันทุกตัว
+    };
+  };
   const zombies = Array.from({ length: count },
     () => makeZombie(colors.zombies[randomBetween(random, 0, colors.zombies.length - 1)], 1));
   for (let i = 0; i < stage.specialZombies; i++) zombies.push(makeZombie(colors.specialZombie, 2));
   if (stage.boss) zombies.push(makeZombie(colors.boss, 3));
-  zombies
-    .sort((a, b) => a.feetY - b.feetY)
-    .forEach(zombie => {
-      const rows = SCENE_ZOMBIES[zombie.variant];
-      const top = Math.min(zombie.feetY, SCENE_HEIGHT - 1) - rows.length * zombie.scale + 1;
-      drawMiniSprite(ctx, rows, zombie.palette, zombie.x, top, zombie.mirrored, zombie.scale);
-    });
+  return zombies.sort((a, b) => a.feetY - b.feetY);
 }
 
+// state: walk = เดิน / idle = ยืนนิ่ง / look = หันมามองจอ
+function stepZombie(zombie) {
+  zombie.timer--;
+  if (zombie.state === 'walk') zombie.x = wrapSceneX(zombie.x + zombie.dir * zombie.speed, 6 * zombie.scale);
+  if (zombie.timer > 0) return;
+  if (zombie.state === 'walk') {
+    zombie.state = 'idle';
+    zombie.timer = randomInt(8, 32);
+  } else {
+    zombie.state = 'walk';
+    zombie.timer = randomInt(24, 72);
+    if (Math.random() < 0.35) zombie.dir *= -1; // หันกลับไปเดินอีกทาง
+  }
+}
+
+function drawSceneZombies(ctx, zombies, frame) {
+  zombies.forEach(zombie => {
+    let rows = SCENE_ZOMBIE_FRONT;
+    if (zombie.state !== 'look') {
+      const step = zombie.state === 'walk' ? Math.floor((frame + zombie.phase) / (zombie.scale + 1)) % 2 : 0;
+      rows = SCENE_ZOMBIE_WALK[zombie.variant][step];
+    }
+    const top = Math.min(zombie.feetY, SCENE_HEIGHT - 1) - rows.length * zombie.scale + 1;
+    const mirrored = zombie.state !== 'look' && zombie.dir !== SCENE_ZOMBIE_FACING[zombie.variant];
+    drawMiniSprite(ctx, rows, zombie.palette, Math.round(zombie.x), top, mirrored, zombie.scale);
+  });
+}
+
+// ---------- อากาศชั้นหน้า (วาดทับทุกอย่าง): ฝน / หมอก ----------
+function makeRain(random, weatherId) {
+  if (weatherId !== 'rain') return [];
+  return Array.from({ length: 170 }, () => ({ x: randomBetween(random, 0, SCENE_WIDTH), y: randomBetween(random, 0, SCENE_HEIGHT) }));
+}
+
+// สายฝนตกเฉียงลงซ้าย ตกพ้นขอบล่างแล้วกลับไปเริ่มด้านบน
+function stepRain(drop) {
+  drop.y += 6;
+  drop.x -= 2;
+  if (drop.y > SCENE_HEIGHT) drop.y -= SCENE_HEIGHT + 6;
+  drop.x = ((drop.x % SCENE_WIDTH) + SCENE_WIDTH) % SCENE_WIDTH;
+}
+
+function makeFog(random, weatherId) {
+  if (weatherId !== 'fog') return [];
+  return Array.from({ length: 9 }, () => { // ก้อนหมอกลอยเป็นริ้ว
+    const y = randomBetween(random, SCENE_GROUND - 30, SCENE_HEIGHT - 6);
+    const x = randomBetween(random, -40, SCENE_WIDTH - 40);
+    const width = randomBetween(random, 50, 110);
+    return { x, y, width, speed: 0.08 + Math.random() * 0.1 };
+  });
+}
+
+function drawWeatherFront(ctx, model) {
+  if (model.weatherId === 'rain') {
+    fillPixels(ctx, 'rgba(20, 24, 40, 0.25)', 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
+    model.rain.forEach(drop => {
+      const x = Math.round(drop.x);
+      const y = Math.round(drop.y);
+      fillPixels(ctx, 'rgba(170, 190, 230, 0.45)', x, y, 1, 3);
+      fillPixels(ctx, 'rgba(170, 190, 230, 0.3)', x - 1, y + 3, 1, 2);
+    });
+  }
+  if (model.weatherId === 'fog') {
+    // หมอกจางทั้งภาพ + หนาที่สุดตรงแนวพื้นถนน แล้วค่อย ๆ จางขึ้นบน/ลงล่าง
+    fillPixels(ctx, 'rgba(165, 160, 175, 0.18)', 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
+    for (let y = SCENE_GROUND - 36; y < SCENE_HEIGHT; y++) {
+      const thickness = 1 - Math.abs(y - SCENE_GROUND) / 36;
+      fillPixels(ctx, `rgba(190, 185, 200, ${(0.42 * Math.max(0, thickness)).toFixed(3)})`, 0, y, SCENE_WIDTH, 1);
+    }
+    model.fog.forEach(strip => {
+      const x = Math.round(wrapSceneX(strip.x + strip.speed * model.frame, strip.width));
+      fillPixels(ctx, 'rgba(210, 205, 220, 0.16)', x, strip.y, strip.width, 3);
+    });
+  }
+}
+
+// ---------- เหตุการณ์เล็ก ๆ เป็นพัก ๆ: ฟ้าแลบ (ฝนตก) / ฝูงอีกาบินผ่าน / ซอมบี้หันมามองจอ ----------
+function startLightning(model) {
+  const points = [];
+  const length = randomInt(28, 44);
+  let x = randomInt(20, SCENE_WIDTH - 20);
+  for (let y = 0; y < length; y += 3) {
+    points.push({ x, y });
+    x += randomInt(-2, 2);
+  }
+  model.bolt = { points, frames: 2 };
+  model.flash = [0.5, 0.12, 0.35, 0.08]; // ฟ้าสว่างวาบ 2 จังหวะ
+}
+
+function startFlock(model) {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const startX = dir > 0 ? -8 : SCENE_WIDTH + 8;
+  const baseY = randomInt(8, 22);
+  model.flock = Array.from({ length: randomInt(5, 8) }, (_, i) => {
+    const rank = Math.ceil(i / 2); // บินเป็นรูปตัว V: ตัวนำอยู่หน้า ที่เหลือเยื้องบน/ล่างตามหลัง
+    return {
+      x: startX - dir * (rank * 6 + randomInt(0, 2)),
+      y: baseY + rank * (i % 2 ? 2 : -2),
+      big: Math.random() < 0.5,
+      dir,
+      speed: 2.4,
+      flap: randomInt(0, 3),
+    };
+  });
+}
+
+function startZombieLook(model) {
+  const candidates = model.zombies.filter(zombie => zombie.state !== 'look'
+    && zombie.x > 0 && zombie.x < SCENE_WIDTH - 6 * zombie.scale);
+  if (candidates.length === 0) return;
+  const zombie = candidates[randomInt(0, candidates.length - 1)];
+  zombie.state = 'look';
+  zombie.timer = randomInt(20, 32);
+}
+
+function runSceneEvents(model) {
+  if (model.frame < model.nextEvent) return;
+  model.nextEvent = model.frame + randomInt(...SCENE_EVENT_GAP);
+  const events = [startZombieLook];
+  if (model.weatherId === 'rain') events.push(startLightning);
+  if (model.birds && model.flock.length === 0) events.push(startFlock);
+  events[randomInt(0, events.length - 1)](model);
+}
+
+// ---------- ประกอบภาพ ----------
 // วาดภาพเมืองร้างของวันนั้น: ช่วงเวลา (เช้า/กลางคืน) + สภาพอากาศ + ช่วงความยาก
 // runSeed = เลขสุ่มประจำเกม: ถนนเดิมทั้งเช้าและกลางคืน แต่ละวัน/แต่ละเกมหน้าตาต่างกัน
 // ซอมบี้สุ่มแยกตามช่วงเวลา กลางคืนจึงมีจำนวนและตำแหน่งต่างจากตอนเช้า
-function drawScene(canvas, phase, day, runSeed) {
-  canvas.width = SCENE_WIDTH;
-  canvas.height = SCENE_HEIGHT;
-  const ctx = canvas.getContext('2d');
+// (ลำดับการสุ่มต้องเหมือนเดิมทุกครั้ง ภาพวันเดิมจึงออกมาเหมือนเดิม)
+function buildScene(phase, day, runSeed) {
   const colors = SCENE_PALETTES[phase] ?? SCENE_PALETTES.morning;
   const seeded = salt => createSeededRandom(mixSeed(runSeed, day, salt));
   const random = seeded(SEED_SALT.city);
   const weather = getWeather(day, runSeed);
-  const weatherId = weather.id;
   const stage = getStage(day);
   const isNight = phase === 'night';
-  drawSky(ctx, colors);
-  if (!weather.coversSky) drawSkyLight(ctx, colors, seeded(SEED_SALT.sky)); // ฟ้าครึ้ม/ฝนตก: เมฆบังหมด
-  drawClouds(ctx, random, colors);
-  drawWeatherBack(ctx, seeded(SEED_SALT.clouds), colors, weatherId);
-  if (weather.birds !== false) drawCrows(ctx, random, colors);
-  drawFarSkyline(ctx, random, colors);
-  const fires = drawMidBuildings(ctx, random, colors);
+  const showSkyLight = !weather.coversSky; // ฟ้าครึ้ม/ฝนตก: เมฆบังหมด
+  const sky = createSceneLayer(ctx => drawSky(ctx, colors));
+  const stars = showSkyLight && colors.moon ? makeStars(seeded(SEED_SALT.sky)) : [];
+  const light = createSceneLayer(ctx => {
+    if (!showSkyLight) return;
+    if (colors.moon) drawMoon(ctx, colors);
+    else drawSun(ctx, colors);
+  });
+  const clouds = makeClouds(random);
+  const overcast = makeOvercast(seeded(SEED_SALT.clouds), weather.id);
+  const crows = weather.birds !== false ? makeCrows(random) : [];
+  const midWindows = { lit: [], dark: [], fire: [] };
+  let fires = [];
+  const city = createSceneLayer(ctx => {
+    drawFarSkyline(ctx, random, colors);
+    fires = drawMidBuildings(ctx, random, colors, midWindows);
+  });
   for (let i = 0; i < stage.extraFires; i++) fires.push({ x: randomBetween(random, 10, SCENE_WIDTH - 30), y: SCENE_GROUND - randomBetween(random, 24, 40) });
-  fires.slice(0, 2 + stage.extraFires).forEach(fire => drawSmoke(ctx, random, colors, fire.x, fire.y));
-  drawShophouses(ctx, random, colors);
-  drawStreet(ctx, random, colors);
-  drawLamp(ctx, colors, randomBetween(random, 30, SCENE_WIDTH - 40));
-  const carX = randomBetween(random, 10, SCENE_WIDTH - 40);
-  drawMiniSprite(ctx, SCENE_CAR, colors.car, carX, SCENE_GROUND + 7, random() < 0.5);
-  drawMiniSprite(ctx, SCENE_CONE, colors.cone, carX + 28, SCENE_GROUND + 12, false);
+  const smokes = fires.slice(0, 2 + stage.extraFires).map(fire => makeSmoke(random, fire.x, fire.y));
+  const shopWindows = { lit: [], dark: [] };
+  let lampX = 0;
+  const street = createSceneLayer(ctx => {
+    drawShophouses(ctx, random, colors, shopWindows);
+    drawStreet(ctx, random, colors);
+    lampX = randomBetween(random, 30, SCENE_WIDTH - 40);
+    drawLampPole(ctx, colors, lampX);
+    const carX = randomBetween(random, 10, SCENE_WIDTH - 40);
+    drawMiniSprite(ctx, SCENE_CAR, colors.car, carX, SCENE_GROUND + 7, random() < 0.5);
+    drawMiniSprite(ctx, SCENE_CONE, colors.cone, carX + 28, SCENE_GROUND + 12, false);
+  });
   // จำนวนพื้นฐานสุ่มครั้งเดียวต่อวัน (เช้า/กลางคืนใช้ร่วมกัน) ส่วนตำแหน่งสุ่มแยกตามช่วงเวลา
   const baseCount = randomBetween(seeded(SEED_SALT.zombieCount), ...stage.sceneZombies);
   const zombieRandom = seeded(isNight ? SEED_SALT.nightZombies : SEED_SALT.morningZombies);
-  drawSceneZombies(ctx, zombieRandom, colors, stage, baseCount, isNight ? CONFIG.sceneNightZombieBonus : 0);
-  drawWeatherFront(ctx, seeded(SEED_SALT.rain), weatherId);
+  return {
+    colors: { ...colors, fireBright: shadeColor(colors.fireWindow, 0.35), fireDim: shadeColor(colors.fireWindow, -0.3) },
+    weatherId: weather.id,
+    birds: weather.birds !== false,
+    layers: { sky, light, city, street },
+    stars,
+    clouds,
+    overcast,
+    crows,
+    flock: [],
+    smokes,
+    windows: { mid: makeWindowFlickers(midWindows), shop: makeWindowFlickers(shopWindows), fire: midWindows.fire },
+    lamp: { x: lampX, on: true, pattern: [] },
+    zombies: makeSceneZombies(zombieRandom, colors, stage, baseCount, isNight ? CONFIG.sceneNightZombieBonus : 0),
+    rain: makeRain(seeded(SEED_SALT.rain), weather.id),
+    fog: makeFog(seeded(SEED_SALT.rain), weather.id),
+    bolt: null,
+    flash: [],
+    flashAlpha: 0,
+    frame: 0,
+    nextEvent: randomInt(24, 80),
+  };
+}
+
+// ขยับทุกอย่างไป 1 เฟรม (เมฆ หมอก ควัน คำนวณตำแหน่งจากเลขเฟรมตอนวาด)
+function stepScene(model) {
+  model.frame++;
+  if (model.bolt && --model.bolt.frames <= 0) model.bolt = null;
+  model.stars.forEach(star => {
+    if (star.dim > 0) star.dim--;
+    else if (Math.random() < 0.006) star.dim = randomInt(1, 3);
+  });
+  model.crows.forEach(crow => { crow.x = wrapSceneX(crow.x + crow.dir * crow.speed, 4); });
+  model.flock.forEach(bird => { bird.x += bird.dir * bird.speed; });
+  model.flock = model.flock.filter(bird => (bird.dir > 0 ? bird.x < SCENE_WIDTH + 6 : bird.x > -6));
+  model.windows.mid.forEach(stepWindowFlicker);
+  model.windows.shop.forEach(stepWindowFlicker);
+  stepLamp(model.lamp);
+  model.zombies.forEach(stepZombie);
+  model.rain.forEach(stepRain);
+  runSceneEvents(model);
+  model.flashAlpha = model.flash.shift() ?? 0;
+}
+
+// วาด 1 เฟรม เรียงจากไกลไปใกล้
+function drawSceneFrame(ctx, model) {
+  const { colors, layers, frame } = model;
+  ctx.clearRect(0, 0, SCENE_WIDTH, SCENE_HEIGHT);
+  ctx.drawImage(layers.sky, 0, 0);
+  drawStars(ctx, colors, model.stars);
+  ctx.drawImage(layers.light, 0, 0);
+  drawClouds(ctx, colors, model.clouds, frame);
+  drawOvercast(ctx, colors, model.overcast, frame);
+  if (model.bolt) drawBolt(ctx, model.bolt);
+  drawCrows(ctx, colors, model.crows, frame);
+  drawCrows(ctx, colors, model.flock, frame);
+  ctx.drawImage(layers.city, 0, 0);
+  drawWindowFlickers(ctx, colors, model.windows.mid);
+  drawFireWindows(ctx, colors, model.windows.fire);
+  model.smokes.forEach(points => drawSmoke(ctx, colors, points, frame));
+  ctx.drawImage(layers.street, 0, 0);
+  drawWindowFlickers(ctx, colors, model.windows.shop);
+  drawLampLight(ctx, colors, model.lamp);
+  drawSceneZombies(ctx, model.zombies, frame);
+  drawWeatherFront(ctx, model);
+  if (model.flashAlpha > 0) fillPixels(ctx, `rgba(225, 228, 255, ${model.flashAlpha})`, 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
+}
+
+// ภาพที่กำลังแสดง: ช่วงเวลา/วัน/เกมเดิมไม่สร้างใหม่ ซอมบี้จึงเดินต่อจากที่เดิม ไม่กระโดดทุกครั้งที่กดปุ่ม
+const sceneView = { key: null, model: null, running: false, lastTime: 0 };
+
+function showAnimatedScene(canvas, phase, day, runSeed) {
+  const key = `${phase}:${day}:${runSeed}`;
+  if (sceneView.key !== key) {
+    sceneView.key = key;
+    sceneView.model = buildScene(phase, day, runSeed);
+    canvas.width = SCENE_WIDTH;
+    canvas.height = SCENE_HEIGHT;
+    drawSceneFrame(canvas.getContext('2d'), sceneView.model);
+  }
+  startSceneLoop();
+}
+
+// เล่นภาพเคลื่อนไหว: หยุดเองเมื่อออกจากหน้าเล่นเกม (แท็บที่ถูกซ่อน เบราว์เซอร์พัก requestAnimationFrame ให้เอง)
+// ผู้เล่นที่ตั้ง "ลดการเคลื่อนไหว" ไว้ เห็นเป็นภาพนิ่งเหมือนเดิม
+function startSceneLoop() {
+  if (sceneView.running || prefersReducedMotion()) return;
+  sceneView.running = true;
+  sceneView.lastTime = performance.now();
+  requestAnimationFrame(sceneTick);
+}
+
+function sceneTick(now) {
+  const canvas = byId('phase-scene');
+  if (!sceneView.running || !sceneView.model || canvas.hidden || byId('screen-game').hidden || prefersReducedMotion()) {
+    sceneView.running = false;
+    return;
+  }
+  if (now - sceneView.lastTime >= 1000 / SCENE_FPS) {
+    sceneView.lastTime = now;
+    stepScene(sceneView.model);
+    drawSceneFrame(canvas.getContext('2d'), sceneView.model);
+  }
+  requestAnimationFrame(sceneTick);
 }
 
 // ภาพเปลี่ยนตามสภาพตัวละคร: คืนชื่อ class ที่ต้องใส่ให้กรอบภาพ
@@ -1130,7 +1505,7 @@ function renderScene(phase, day, runSeed) {
   } else {
     image.hidden = true;
     canvas.hidden = false;
-    drawScene(canvas, phase, day, runSeed);
+    showAnimatedScene(canvas, phase, day, runSeed);
     canvas.setAttribute('aria-label', label);
   }
 }
