@@ -1362,6 +1362,7 @@ function renderTraitTags(character) {
 // icon = ไอคอนพิกเซลหน้าหัวข้อ
 const PHASE_VIEWS = {
   morning: { icon: 'sun',        title: day => t('morningTitle', day), scene: 'morning', body: renderMorningBody },
+  event:   { icon: 'sun_cloud',  title: day => t('eventTitle', day),   scene: 'morning', body: renderEventBody },
   night:   { icon: 'moon',       title: day => t('nightTitle', day),   scene: 'night',   body: renderNightBody },
   summary: { icon: 'sunrise',    title: day => t('summaryTitle', day), scene: 'night',   body: renderSummaryBody },
   dead:    { icon: 'skull',      title: () => t('deadTitle'),          scene: 'night',   body: renderDeadBody },
@@ -1371,8 +1372,9 @@ const PHASE_VIEWS = {
 function renderPhase() {
   const view = PHASE_VIEWS[game.phase];
   byId('phase-title').innerHTML = iconLabel(view.icon, view.title(game.day));
-  // ตายตอนเช้า (เช่น ของเสี่ยง) ใช้ภาพตอนเช้า
-  const scene = game.phase === 'dead' && game.death?.phase === 'morning' ? 'morning' : view.scene;
+  // ตายตอนกลางวัน (ของเสี่ยงตอนเช้า / อีเวนต์ตอนบ่าย) ใช้ภาพตอนกลางวัน
+  const diedInDaylight = ['morning', 'event'].includes(game.death?.phase);
+  const scene = game.phase === 'dead' && diedInDaylight ? 'morning' : view.scene;
   renderScene(scene, game.day, game.seed);
   byId('phase-body').innerHTML = view.body() + renderDayLog();
 }
@@ -1400,6 +1402,90 @@ function renderMorningBody() {
     ${intro}`;
 }
 
+// บ่าย (อีเวนต์): ยังไม่เลือก = การ์ดทางเลือก / เลือกแล้ว = ผลที่ได้ + ปุ่มเข้าสู่กลางคืน
+function renderEventBody() {
+  const event = getEvent(game.event.id);
+  const head = `
+    <div class="event-head">
+      ${iconHtml(event.icon, 2)}
+      <div>
+        <span class="event-type event-type-${event.type}">${escapeHtml(tr(EVENT_TYPES[event.type], 'name'))}</span>
+        <p class="event-name">${escapeHtml(tr(event, 'name'))}</p>
+      </div>
+    </div>
+    <p class="event-desc">${escapeHtml(getEventDesc(event, game.day))}</p>`;
+  if (!game.event.resolved) {
+    return `${head}
+      <div class="event-choices">${event.choices.map(renderEventChoice).join('')}</div>
+      <p class="pick-status">${escapeHtml(t('eventHint'))}</p>`;
+  }
+  return `${head}${renderEventResult(event)}${phaseButton('end-event', t('eventContinueButton'))}`;
+}
+
+// ปุ่มทางเลือก 1 ทาง: % สำเร็จ, สิ่งที่ต้องจ่าย, ผลถ้าสำเร็จ/พลาด (ทางที่ไม่ต้องลุ้นบอกผลเดียว)
+function renderEventChoice(choice, index) {
+  const block = getChoiceBlock(choice);
+  let odds = `<span class="chip chip-neutral">${escapeHtml(t('eventCertain'))}</span>`;
+  if (choice.check) {
+    const { chance, bonus } = getChoiceChance(choice);
+    odds = `<span class="chip chip-odds">${iconLabel('dice', t('eventChance', chance, bonus ? formatSigned(bonus) : ''))}</span>`;
+  }
+  const giveChip = choice.give
+    ? `<span class="chip chip-bad">${escapeHtml(t('eventGiveChip', choice.give.map(id => tr(getItem(id), 'name')).join(t('orJoin'))))}</span>`
+    : '';
+  const costLine = choice.give || choice.cost
+    ? eventLine(t('eventCostLabel'), giveChip + (choice.cost ? renderOutcomeChips({ effects: choice.cost }) : ''))
+    : '';
+  const outcomes = choice.check
+    ? eventLine(t('eventSuccessLabel'), renderOutcomeChips(choice.success)) + eventLine(t('eventFailLabel'), renderOutcomeChips(choice.fail))
+    : eventLine(t('eventResultLabel'), renderOutcomeChips(choice.success));
+  return `
+    <button class="event-choice" type="button" data-action="event-choice" data-index="${index}"${block ? ' disabled' : ''}>
+      <span class="event-choice-head">
+        <span class="event-choice-label">${escapeHtml(tr(choice, 'label'))}</span>
+        ${odds}
+      </span>
+      ${costLine}
+      ${outcomes}
+      ${block ? `<span class="event-block">${iconLabel('cross', block)}</span>` : ''}
+    </button>`;
+}
+
+// แถวในปุ่มทางเลือก: หัวข้อสั้น ๆ + ชิป
+function eventLine(label, chipsHtml) {
+  return `<span class="event-line"><b>${escapeHtml(label)}</b><span class="chip-list">${chipsHtml}</span></span>`;
+}
+
+// ชิปของผล: ค่าสถานะ (เขียว = ดี, แดง = แย่), ได้ของ, ของสุ่ม, เสียของ
+function renderOutcomeChips(outcome) {
+  const chip = (good, html) => `<span class="chip ${good ? 'chip-good' : 'chip-bad'}">${html}</span>`;
+  const chips = Object.entries(outcome.effects ?? {}).map(([key, value]) => {
+    const def = CONFIG.stats[key];
+    return chip(def.higherIsWorse ? value < 0 : value > 0, iconLabel(def.icon, `${tr(def, 'name')} ${formatSigned(value)}`));
+  });
+  (outcome.items ?? []).forEach(id => chips.push(chip(true, iconLabel(getItem(id).icon, t('eventGetItem', tr(getItem(id), 'name'))))));
+  if (outcome.randomItems) chips.push(chip(true, iconLabel('crate', t('eventRandomItems', outcome.randomItems))));
+  if (outcome.loseItems) chips.push(chip(false, iconLabel('backpack', t('eventLoseItems', outcome.loseItems))));
+  return chips.length > 0 ? chips.join('') : `<span class="chip chip-neutral">${escapeHtml(t('eventNothing'))}</span>`;
+}
+
+// ผลหลังเลือก: ทางที่เลือก, สำเร็จ/พลาด, คำบรรยาย, สิ่งที่เปลี่ยนจริง
+function renderEventResult(event) {
+  const { choiceIndex, success, report } = game.event;
+  const choice = event.choices[choiceIndex];
+  const outcome = success === false ? choice.fail : choice.success;
+  const tone = success === null ? 'neutral' : success ? 'good' : 'bad';
+  const verdict = success === null ? '' : `<p class="event-verdict">${escapeHtml(t(success ? 'eventSuccess' : 'eventFail'))}</p>`;
+  const lines = report.map(entry => `<li>${escapeHtml(formatLogEntry(entry))}</li>`).join('');
+  return `
+    <div class="event-result is-${tone}">
+      <p class="event-result-choice">${escapeHtml(t('eventYouChose', tr(choice, 'label')))}</p>
+      ${verdict}
+      <p class="event-result-text">${escapeHtml(tr(outcome, 'text'))}</p>
+      ${lines ? `<ul class="night-report">${lines}</ul>` : ''}
+    </div>`;
+}
+
 // กลางคืน: บอกชนิดการบุก แรงบุกโดยประมาณ การป้องกันที่มี และความเสียหายที่คาดว่าจะได้รับ
 function renderNightBody() {
   const plan = getNightPlan();
@@ -1415,6 +1501,10 @@ function renderNightBody() {
     plan.reduction > 0 ? chip('motorcycle_helmet', t('nightReduction', plan.reduction), 'good') : '',
     damageMod ? chip('blood', t('nightDamageMod', formatSigned(damageMod)), damageMod > 0 ? 'bad' : 'good') : '',
     weapons.noise > 0 ? chip('speaker', t('nightNoise', weapons.noise * CONFIG.night.noiseAttack), 'bad') : '',
+    // วันนี้ได้กิน/ดื่มหรือยัง (บอกล่วงหน้าว่าสิ้นวันแผลจะฟื้นไหม)
+    game.fed
+      ? chip('meat', t('nightFed', CONFIG.dayEnd.regenFed), 'good')
+      : chip('meat', t('nightNotFed', CONFIG.dayEnd.regenUnfed), 'bad'),
   ].join('');
   // ปืน: เลือกได้ว่าจะยิงคืนนี้ไหม (ประหยัดกระสุนได้ แต่พลังโจมตีลดลง)
   const allGuns = planWeapons(game.inventory, game.stats.ammo, true, plan.mods);
@@ -1458,7 +1548,7 @@ function renderDeadBody() {
       <p class="death-message">${escapeHtml(t('deadMessage', getDisplayName(character), death.day, CONFIG.totalDays))}</p>
       <p class="death-cause">${escapeHtml(t('deadCause', describeCause(death.cause)))}</p>
     </div>
-    ${renderReport()}
+    ${death.phase === 'event' && game.event?.resolved ? renderEventResult(getEvent(game.event.id)) : renderReport()}
     ${phaseButton('show-end', t('endSummaryButton'))}`;
 }
 
@@ -1560,6 +1650,10 @@ function renderEndStats() {
       row(t('statWaterEmpty'), t('unitDays', tally.waterEmptyDays)),
       row(t('statMaxStress'), tally.maxStress),
     ], `<p class="end-final-title">${escapeHtml(t('statFinal'))}</p><ul class="end-final-list">${finalStats}</ul>`),
+    group('radio', t('endEventsHeading'), [
+      row(t('statEventsSeen'), t('unitTimes', tally.eventsSeen)),
+      row(t('statEventChecks'), `${tally.eventWins} / ${tally.eventChecks}`),
+    ]),
   ].join('');
 }
 
@@ -1707,6 +1801,7 @@ function changeStat(key, amount, cause, useBoost = true) {
   const changed = game.stats[key] - before;
   if (key === 'hp' && changed < 0 && cause) game.lastDamageCause = cause;
   if (key === 'hp' && changed < 0) game.tally.hpLost -= changed; // สถิติ: พลังชีวิตที่เสียไปทุกสาเหตุ
+  if ((key === 'food' || key === 'water') && changed > 0) game.fed = true; // ได้กิน/ดื่มจริง → สิ้นวันแผลฟื้น
   if (key === 'stress') game.tally.maxStress = Math.max(game.tally.maxStress, game.stats.stress);
   return changed;
 }
@@ -1742,6 +1837,7 @@ function formatLogEntry(entry) {
     if (arg?.items) return arg.items.map(id => tr(getItem(id), 'name')).join(', ');
     if (arg?.riskOf) return tr(getItem(arg.riskOf), 'riskText');
     if (arg?.threat) return tr(getThreat(arg.threat), 'name');
+    if (arg?.event) return tr(getEvent(arg.event), 'name');
     return arg;
   };
   return t(entry.key, ...entry.args.map(resolve));
@@ -1893,12 +1989,160 @@ function usesLeftText(item, entry) {
   return item.use ? t('usesLeftTimes', entry.usesLeft) : t('usesLeftDays', entry.usesLeft);
 }
 
-// จบช่วงเช้า: สุ่มว่าคืนนี้อะไรจะบุก (บอกผู้เล่นก่อน จะได้เตรียมตัว)
+// จบช่วงเช้า: สุ่มว่าบ่ายนี้มีอีเวนต์ไหม ถ้าไม่มีเข้ากลางคืนเลย
 function endMorning() {
   if (game.phase !== 'morning') return;
+  const eventId = rollEvent(game.day);
+  if (eventId) startEvent(eventId);
+  else startNight();
+  renderGame();
+  scrollPhaseIntoView();
+}
+
+// เข้ากลางคืน: สุ่มว่าคืนนี้อะไรจะบุก (บอกผู้เล่นก่อน จะได้เตรียมตัว)
+function startNight() {
   game.phase = 'night';
   game.night = { threatId: rollNightThreat(game.day), useGuns: true };
+}
+
+// ------------------------------------------------------------
+// 8.55) อีเวนต์ระหว่างวัน (ข้อมูลอยู่ใน events.js, ตั้งค่าอยู่ที่ CONFIG.events)
+//       เกิดหลังจบช่วงเช้า → ผู้เล่นเลือก 1 ทาง → เห็นผล → เข้ากลางคืน
+// ------------------------------------------------------------
+
+// ผลของนิสัย/อายุ/อาชีพที่ใช้กับ % สำเร็จ: [ชื่อผล, ทิศทาง] (+1 = บวกเพิ่ม, −1 = ลบออก)
+const EVENT_CHECK_MODS = {
+  friendly:  ['survivorLuck', 1],  // ผู้รอดชีวิตเป็นมิตร
+  scam:      ['scamRisk', -1],     // ถูกหลอก
+  emergency: ['emergencyFail', -1], // พลาดในเหตุฉุกเฉิน
+  luck:      ['lootLuck', 1],      // โชคในการเจอของ
+};
+
+function getEvent(id) {
+  return findById(EVENTS, id);
+}
+
+// ข้อความบรรยายอีเวนต์ ({daysLeft} = อีกกี่วันหน่วยกู้ภัยจะมา)
+function getEventDesc(event, day) {
+  return tr(event, 'desc').replace('{daysLeft}', String(CONFIG.totalDays - day + 1));
+}
+
+// อีเวนต์นี้เกิดได้ไหมวันนี้: ถึงวันแรกแล้ว, อากาศตรง (ถ้ากำหนด), ไม่เพิ่งเกิดไปไม่กี่วันก่อน
+function isEventAvailable(event, day) {
+  if (day < CONFIG.events.firstDay) return false;
+  if (event.weather && !event.weather.includes(getWeather(day, game.seed).id)) return false;
+  return !game.eventHistory.some(entry => entry.id === event.id && day - entry.day < CONFIG.events.noRepeatDays);
+}
+
+// สุ่มอีเวนต์ของวันนี้: โอกาสเกิดตาม eventChance ของช่วงวัน แล้วเลือกตามน้ำหนัก (null = ไม่มีอีเวนต์)
+function rollEvent(day) {
+  if (day < CONFIG.events.firstDay) return null;
+  if (Math.random() * 100 >= getStage(day).eventChance) return null;
+  const pool = EVENTS.filter(event => isEventAvailable(event, day));
+  if (pool.length === 0) return null;
+  return pickWeighted(pool.map(event => ({ id: event.id, weight: event.weight ?? 10 }))).id;
+}
+
+function startEvent(eventId) {
+  game.phase = 'event';
+  game.event = { id: eventId, resolved: false, choiceIndex: null, success: null, report: [] };
+  game.eventHistory.push({ day: game.day, id: eventId });
+  game.tally.eventsSeen += 1;
+}
+
+// % สำเร็จของทางเลือกหลังรวมผลของตัวละคร → { chance, bonus } (bonus = ส่วนที่ตัวละครเพิ่ม/ลด)
+function getChoiceChance(choice) {
+  const [modKey, direction] = EVENT_CHECK_MODS[choice.check];
+  const bonus = direction * (getCharacterMods(game.character)[modKey] ?? 0);
+  const { minChance, maxChance } = CONFIG.events;
+  return { chance: clamp(choice.chance + bonus, minChance, maxChance), bonus };
+}
+
+function hasWeapon() {
+  return game.inventory.some(entry => getItem(entry.id).passive?.weaponPower);
+}
+
+// เลือกทางนี้ได้ไหม: คืนเหตุผลที่เลือกไม่ได้ (null = เลือกได้)
+//   ค่าที่ต้องจ่าย (อาหาร/น้ำ/กระสุน) ต้องมีพอ, ของที่ต้องให้ต้องมีในกระเป๋า, ทางที่ต้องสู้ต้องมีอาวุธ
+function getChoiceBlock(choice) {
+  for (const [key, amount] of Object.entries(choice.cost ?? {})) {
+    if (amount < 0 && !CONFIG.stats[key].higherIsWorse && game.stats[key] < -amount) {
+      return t('eventNeedStat', tr(CONFIG.stats[key], 'name'), -amount);
+    }
+  }
+  if (choice.give && !game.inventory.some(entry => choice.give.includes(entry.id))) {
+    return t('eventNeedItem', choice.give.map(id => tr(getItem(id), 'name')).join(t('orJoin')));
+  }
+  if (choice.requires === 'weapon' && !hasWeapon()) return t('eventNeedWeapon');
+  return null;
+}
+
+// กดเลือกทาง: จ่าย → ลุ้น (ถ้ามี) → ได้ผล → บันทึก แล้ววาดผลให้ดู
+function chooseEventOption(index) {
+  if (game.phase !== 'event' || game.event.resolved) return;
+  const event = getEvent(game.event.id);
+  const choice = event.choices[index];
+  if (!choice || getChoiceBlock(choice)) return;
+  const hpBefore = game.stats.hp;
+  const cause = { kind: 'event', eventId: event.id };
+  const report = [];
+  if (choice.give) {
+    const giveIndex = game.inventory.findIndex(entry => choice.give.includes(entry.id));
+    const [given] = game.inventory.splice(giveIndex, 1);
+    report.push({ key: 'eventGaveReport', args: [{ item: given.id }] });
+  }
+  if (choice.cost) report.push({ key: 'eventCostReport', args: [applyEffects(choice.cost, cause)] });
+  let success = null;
+  if (choice.check) {
+    success = Math.random() * 100 < getChoiceChance(choice).chance;
+    game.tally.eventChecks += 1;
+    if (success) game.tally.eventWins += 1;
+  }
+  if (!isDead()) applyEventOutcome(success === false ? choice.fail : choice.success, cause, report);
+  game.event = { ...game.event, resolved: true, choiceIndex: index, success, report };
+  addLog(success === null ? 'logEventDone' : success ? 'logEventSuccess' : 'logEventFail', { event: event.id });
+  if (isDead()) markDead();
   renderGame();
+  if (game.stats.hp < hpBefore) playHitEffect();
+}
+
+// ผลของทางที่เลือก: ค่าสถานะ → ได้ของ → เสียของ
+function applyEventOutcome(outcome, cause, report) {
+  if (outcome.effects) report.push({ key: 'eventEffectsReport', args: [applyEffects(outcome.effects, cause)] });
+  if (isDead()) return;
+  const randomIds = Array.from({ length: outcome.randomItems ?? 0 }, () => rollLootItem(game.day, game.character, []));
+  [...(outcome.items ?? []), ...randomIds].forEach(id => giveEventItem(id, report));
+  if (outcome.loseItems) loseRandomItems(outcome.loseItems, report);
+}
+
+// ได้ของจากอีเวนต์: ของสวมใส่ใส่ทันทีถ้าช่องว่าง / ของทั่วไปถ้ากระเป๋าเต็มต้องทิ้งไว้
+function giveEventItem(itemId, report) {
+  const item = getItem(itemId);
+  if (isWearable(item) ? canWear(item) : game.inventory.length < getBagCapacity()) {
+    if (isWearable(item)) game.worn[item.wear] = itemId;
+    else game.inventory.push(createBagItem(itemId));
+    report.push({ key: 'eventGotItemReport', args: [{ item: itemId }] });
+  } else {
+    report.push({ key: 'eventBagFullReport', args: [{ item: itemId }] });
+  }
+}
+
+// เสียของในกระเป๋าแบบสุ่ม (ของที่ใส่อยู่ เช่น กระเป๋าเป้ ไม่หาย)
+function loseRandomItems(count, report) {
+  const lost = [];
+  for (let i = 0; i < count && game.inventory.length > 0; i++) {
+    const [entry] = game.inventory.splice(Math.floor(Math.random() * game.inventory.length), 1);
+    lost.push(entry.id);
+  }
+  report.push(lost.length > 0 ? { key: 'eventLostReport', args: [{ items: lost }] } : { key: 'eventNothingToLose', args: [] });
+}
+
+// กด "เข้าสู่กลางคืน" หลังเห็นผลอีเวนต์
+function endEvent() {
+  if (game.phase !== 'event' || !game.event.resolved) return;
+  startNight();
+  renderGame();
+  scrollPhaseIntoView();
 }
 
 // ------------------------------------------------------------
@@ -2103,10 +2347,14 @@ function runDailyNeeds(report) {
   if (!isDead() && game.stats.water === 0) {
     report.push({ key: 'reportThirsty', args: [-changeStat('hp', -settings.thirstDamage, { kind: 'thirst' })] });
   }
+  // พักฟื้น: วันที่ได้กิน/ดื่มจริง (game.fed) ฟื้นมากกว่า — ไม่ใช่ยา จึงไม่ได้ผล healPower
   if (!isDead() && game.stats.food > 0 && game.stats.water > 0) {
-    const gained = changeStat('hp', settings.regenHp, null, false); // พักฟื้นเอง ไม่ใช่ยา จึงไม่ได้ผล healPower
-    if (gained > 0) report.push({ key: 'reportRegen', args: [gained] });
+    const regen = game.fed ? settings.regenFed : settings.regenUnfed;
+    const gained = regen > 0 ? changeStat('hp', regen, null, false) : 0;
+    if (gained > 0) report.push({ key: game.fed ? 'reportRegenFed' : 'reportRegenUnfed', args: [gained] });
+    else if (!game.fed && game.stats.hp < game.stats.maxHp) report.push({ key: 'reportNoRegen', args: [] });
   }
+  game.fed = false; // เริ่มนับใหม่: กิน/ดื่มหลังจากนี้ (รวมตอนดูสรุปวัน) นับให้สิ้นวันถัดไป
 }
 
 // หายเหนื่อยตอนนอน: คืนที่โดนทำร้ายหายน้อยลง, เครียดถึงขีดหายได้แค่บางส่วน, ปรับด้วย restRecovery
@@ -2173,6 +2421,7 @@ function describeCause(cause) {
     case 'thirst': return t('causeThirst');
     case 'exhaust': return t('causeExhaust');
     case 'item': return t('causeItem', tr(getItem(cause.itemId), 'name'), tr(getItem(cause.itemId), 'riskText'));
+    case 'event': return t('causeEvent', tr(getEvent(cause.eventId), 'name'));
     default: return t('causeUnknown');
   }
 }
@@ -2190,6 +2439,7 @@ function startNextDay() {
   game.day += 1;
   game.phase = 'morning';
   game.morning = rollMorningOffer(game.day, game.character, game.inventory);
+  game.event = null;
   game.night = null;
   game.report = null;
   game.log = [];
@@ -2216,7 +2466,7 @@ function scrollPhaseIntoView() {
 
 // เล่นต่อได้ไหม (ตายหรือรอดครบแล้วใช้/ทิ้งของไม่ได้)
 function isPlayable() {
-  return ['morning', 'night', 'summary'].includes(game.phase);
+  return ['morning', 'event', 'night', 'summary'].includes(game.phase);
 }
 
 // ไอคอนของ: ไอคอนพิกเซลใน icons.js (scale 2 = 32px) ถ้าเปิด CONFIG.itemImages จะใช้รูป images/items/<id>.png
@@ -2444,6 +2694,9 @@ function createGame(character, seed) {
     log: [],
     lastDamageCause: null, // สาเหตุล่าสุดที่ทำให้พลังชีวิตลด
     death: null,      // { day, phase, cause } เมื่อพลังชีวิตหมด
+    fed: false,       // ได้กิน/ดื่มตั้งแต่สิ้นวันก่อนไหม (อาหารหรือน้ำเพิ่มขึ้นจริง) — ใช้ตัดสินว่าแผลฟื้นไหม
+    event: null,      // อีเวนต์ช่วงบ่าย { id, resolved, choiceIndex, success, report }
+    eventHistory: [], // อีเวนต์ที่เคยเกิด [{ day, id }] (กันเกิดซ้ำถี่เกินไป)
     tally: createTally(stats), // สถิติของเกมนี้ (แสดงในหน้าสรุปตอนจบ)
     result: null,     // { won, dayReached, isNewBest, best } เมื่อเกมจบ (ตาย/รอดครบ)
   };
@@ -2466,6 +2719,9 @@ function createTally(stats) {
     foodEmptyDays: 0,  // สิ้นวันแล้วอาหารเป็น 0
     waterEmptyDays: 0, // สิ้นวันแล้วน้ำเป็น 0
     maxStress: stats.stress,
+    eventsSeen: 0,     // อีเวนต์ที่เจอ
+    eventChecks: 0,    // ทางเลือกที่ต้องลุ้น
+    eventWins: 0,      // ลุ้นแล้วสำเร็จ
   };
 }
 
@@ -2603,6 +2859,40 @@ function validateConfig() {
   });
   if (!CONFIG.endings.won?.desc) errors.push('endings.won: ต้องมี desc (ข้อความปิดท้ายตอนรอดครบ)');
 
+  // อีเวนต์ (events.js): ประเภท ทางเลือก 2-3 ทาง ผลต้องใช้ค่าสถานะ/ของที่มีจริง ทางที่ต้องลุ้นต้องมีผลตอนพลาด
+  stages.forEach(stage => {
+    if (!(stage.eventChance >= 0 && stage.eventChance <= 100)) errors.push(`difficultyStages ${stage.id}: eventChance ต้องอยู่ระหว่าง 0-100`);
+  });
+  if (new Set(EVENTS.map(event => event.id)).size !== EVENTS.length) errors.push('events.js: มี id ซ้ำกัน');
+  EVENTS.forEach(event => {
+    const owner = `events.js ${event.id}`;
+    if (!EVENT_TYPES[event.type]) errors.push(`${owner}: ไม่รู้จักประเภท "${event.type}"`);
+    if (!(event.weight > 0)) errors.push(`${owner}: weight ต้องมากกว่า 0`);
+    (event.weather ?? []).forEach(id => {
+      if (!findById(CONFIG.weather, id)) errors.push(`${owner}: ไม่รู้จักสภาพอากาศ "${id}"`);
+    });
+    if (!(event.choices?.length >= 2 && event.choices.length <= 3)) errors.push(`${owner}: ต้องมีทางเลือก 2-3 ทาง`);
+    (event.choices ?? []).forEach((choice, index) => {
+      const where = `${owner} ทางที่ ${index + 1}`;
+      if (!choice.label) errors.push(`${where}: ต้องมี label`);
+      if (choice.check && !EVENT_CHECK_MODS[choice.check]) errors.push(`${where}: ไม่รู้จัก check "${choice.check}"`);
+      if (choice.check && !(choice.chance >= 0 && choice.chance <= 100)) errors.push(`${where}: chance ต้องอยู่ระหว่าง 0-100`);
+      if (choice.check && !choice.fail) errors.push(`${where}: ทางที่ต้องลุ้นต้องมี fail`);
+      if (!choice.check && choice.fail) errors.push(`${where}: มี fail แต่ไม่มี check (จะไม่มีวันพลาด)`);
+      if (!choice.success) errors.push(`${where}: ต้องมี success`);
+      if (choice.requires && choice.requires !== 'weapon') errors.push(`${where}: ไม่รู้จัก requires "${choice.requires}"`);
+      [...(choice.give ?? []), ...(choice.success?.items ?? []), ...(choice.fail?.items ?? [])].forEach(id => {
+        if (!getItem(id)) errors.push(`${where}: ไม่มีของ "${id}" ใน items.js`);
+      });
+      [choice.cost, choice.success?.effects, choice.fail?.effects].forEach(effects => Object.keys(effects ?? {}).forEach(key => {
+        if (!CONFIG.stats[key]) errors.push(`${where}: ไม่รู้จักค่าสถานะ "${key}"`);
+      }));
+      [choice.success, choice.fail].filter(Boolean).forEach(outcome => {
+        if (!outcome.text) errors.push(`${where}: ผลทุกแบบต้องมี text`);
+      });
+    });
+  });
+
   // ไอคอนพิกเซล (icons.js): แผนที่พิกเซลต้องไม่เกิน 16x16 และใช้แต่สีที่มีใน ICON_COLORS
   Object.keys(PIXEL_ICONS).forEach(id => getIconLayers(id).forEach(rows => {
     if (rows.length > ICON_SIZE) errors.push(`icons.js ${id}: เกิน ${ICON_SIZE} แถว`);
@@ -2620,6 +2910,7 @@ function validateConfig() {
     ...CONFIG.nightThreats.map(threat => [`ชนิดการบุก ${threat.id}`, threat.icon]),
     ...CONFIG.weather.map(weather => [`สภาพอากาศ ${weather.id}`, weather.icon]),
     ...ITEMS.map(item => [`items.js ${item.id}`, item.icon]),
+    ...EVENTS.map(event => [`events.js ${event.id}`, event.icon]),
     ...UI_ICON_IDS.map(id => ['หน้าจอ (UI_ICON_IDS)', id]),
   ].forEach(([owner, id]) => {
     if (!PIXEL_ICONS[id]) errors.push(`${owner}: ไม่มีไอคอน "${id}" ใน icons.js`);
@@ -2646,6 +2937,16 @@ function validateConfig() {
     CONFIG.nightThreats.forEach(threat => checkTranslation(`ชนิดการบุก ${threat.id}`, threat));
     CONFIG.endings.died.forEach(ending => checkTranslation(`ข้อความปิดท้ายวันที่ ${ending.fromDay}+`, ending));
     checkTranslation('ข้อความปิดท้ายตอนรอดครบ', CONFIG.endings.won);
+    Object.entries(EVENT_TYPES).forEach(([key, type]) => checkTranslation(`ประเภทอีเวนต์ ${key}`, type));
+    EVENTS.forEach(event => {
+      checkTranslation(`events.js ${event.id}`, event);
+      event.choices.forEach((choice, index) => {
+        if (choice.label && !choice[language]?.label) errors.push(`events.js ${event.id} ทางที่ ${index + 1}: ยังไม่มีคำแปล ${language}.label`);
+        [choice.success, choice.fail].filter(Boolean).forEach(outcome => {
+          if (outcome.text && !outcome[language]?.text) errors.push(`events.js ${event.id} ทางที่ ${index + 1}: ยังไม่มีคำแปล ${language}.text`);
+        });
+      });
+    });
     Object.entries(MOD_INFO).forEach(([key, info]) => checkTranslation(`MOD_INFO ${key}`, info));
     ITEMS.forEach(item => checkTranslation(`ของ ${item.id}`, item));
     [ITEM_TYPES, ITEM_RARITIES, ITEM_PASSIVE_INFO, ITEM_WEAR_SLOTS].forEach(table => {
@@ -2765,6 +3066,8 @@ function bindEvents() {
     if (action === 'resolve-night') resolveNight();
     if (action === 'next-day') startNextDay();
     if (action === 'show-end') showEndScreen();
+    if (action === 'event-choice') chooseEventOption(Number(button.dataset.index));
+    if (action === 'end-event') endEvent();
   });
   // ติ๊ก "ยิงปืนคืนนี้" แล้ววาดตัวเลขคาดการณ์ใหม่
   byId('phase-body').addEventListener('change', event => {

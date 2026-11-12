@@ -245,11 +245,12 @@ const CONFIG = {
   // ---------- ช่วงความยากตามวัน ----------
   //   nightAttack   = แรงบุกตอนกลางคืน [ต่ำสุด, สูงสุด] (สุ่มทุกคืน)
   //   specialChance = โอกาส % ที่คืนนั้นมีซอมบี้พิเศษ (ดู nightThreats ที่ special: true)
+  //   eventChance   = โอกาส % ต่อวันที่จะเกิดอีเวนต์หลังจบช่วงเช้า (ข้อมูลอีเวนต์อยู่ใน events.js)
   //   ที่เหลือใช้กับภาพประกอบ (จำนวนซอมบี้/ความพังของเมือง)
   difficultyStages: [
-    { id: 'early', fromDay: 1,  name: 'ช่วงต้น',  en: { name: 'Early' },  nightAttack: [3, 8],   specialChance: 0,  sceneZombies: [2, 4],   specialZombies: 0, boss: false, extraFires: 0 },
-    { id: 'mid',   fromDay: 31, name: 'ช่วงกลาง', en: { name: 'Middle' }, nightAttack: [7, 14],  specialChance: 30, sceneZombies: [5, 8],   specialZombies: 2, boss: false, extraFires: 1 },
-    { id: 'late',  fromDay: 71, name: 'ช่วงท้าย', en: { name: 'Late' },   nightAttack: [12, 20], specialChance: 0,  sceneZombies: [10, 16], specialZombies: 3, boss: true,  extraFires: 3 },
+    { id: 'early', fromDay: 1,  name: 'ช่วงต้น',  en: { name: 'Early' },  nightAttack: [3, 8],   specialChance: 0,  eventChance: 30,  sceneZombies: [2, 4],   specialZombies: 0, boss: false, extraFires: 0 },
+    { id: 'mid',   fromDay: 31, name: 'ช่วงกลาง', en: { name: 'Middle' }, nightAttack: [7, 14],  specialChance: 30, eventChance: 40, sceneZombies: [5, 8],   specialZombies: 2, boss: false, extraFires: 1 },
+    { id: 'late',  fromDay: 71, name: 'ช่วงท้าย', en: { name: 'Late' },   nightAttack: [12, 20], specialChance: 0,  eventChance: 50,  sceneZombies: [10, 16], specialZombies: 3, boss: true,  extraFires: 3 },
   ],
 
   // ---------- กลางคืน: ซอมบี้บุกที่พัก ----------
@@ -306,7 +307,8 @@ const CONFIG = {
     waterDrain: 10,        // น้ำลดต่อวัน (เดิม 15 — ทดสอบแล้วน้ำในแผนที่มีไม่พอ จึงลดเหลือ 10)
     starveDamage: 10,      // อาหารเป็น 0 → พลังชีวิตลดเท่านี้ (อดอาหาร)
     thirstDamage: 15,      // น้ำเป็น 0 → พลังชีวิตลดเท่านี้ (ขาดน้ำ)
-    regenHp: 3,            // อาหารและน้ำยังไม่หมด → พลังชีวิตฟื้นเอง
+    regenFed: 5,           // วันที่ได้กิน/ดื่ม (อาหารหรือน้ำเพิ่มขึ้นจากของในกระเป๋าหรืออีเวนต์) และอาหาร/น้ำยังไม่หมด → พลังชีวิตฟื้น
+    regenUnfed: 0,         // วันที่ไม่ได้กิน/ดื่มอะไรเพิ่ม → พลังชีวิตฟื้นเท่านี้ (เดิมฟื้น 3 ทุกวันโดยไม่ต้องกิน)
     restFatigue: 30,       // นอนหลับหายเหนื่อย
     restFatigueHurt: 15,   // คืนที่โดนทำร้าย หายเหนื่อยแค่นี้
     stressHurt: 8,         // คืนที่โดนทำร้าย เครียดเพิ่ม
@@ -315,6 +317,14 @@ const CONFIG = {
     exhaustDamage: 10,
     stressedAt: 75,        // ความเครียดถึงนี้ → นอนหายเหนื่อยได้แค่ stressedRestFactor เท่า
     stressedRestFactor: 0.5,
+  },
+
+  // ---------- อีเวนต์ระหว่างวัน (ข้อมูลอีเวนต์อยู่ใน events.js, โอกาสเกิดอยู่ที่ eventChance ของช่วงวัน) ----------
+  events: {
+    firstDay: 2,      // วันแรกที่มีอีเวนต์ได้ (วันที่ 1 ให้ผู้เล่นตั้งตัวก่อน)
+    noRepeatDays: 10, // อีเวนต์เดิมจะไม่เกิดซ้ำภายในกี่วัน
+    minChance: 5,     // % สำเร็จต่ำสุด/สูงสุดหลังรวมผลของนิสัย (ไม่มีอะไรแน่นอน 100%)
+    maxChance: 95,
   },
 
   // ---------- ข้อความปิดท้ายในหน้าสรุปตอนจบเกม ----------
@@ -435,7 +445,7 @@ const CONFIG = {
 //    unit   : '' = บวก/ลบตรง ๆ, '%' = เปอร์เซ็นต์
 //    better : 'up' = ยิ่งมากยิ่งดี, 'down' = ยิ่งน้อยยิ่งดี
 //    area   : หมวดของจุดอ่อน ใช้เช็ก "ข้อเสียซ้อนกัน" ตอนสุ่มตัวละคร
-//  หมายเหตุ: กลุ่ม "เหตุการณ์" จะเริ่มมีผลในขั้นที่ 5 กลุ่มอื่นมีผลแล้ว
+//  กลุ่ม "เหตุการณ์" (survivorLuck, scamRisk, emergencyFail) มีผลกับ % สำเร็จของทางเลือกในอีเวนต์ (events.js)
 // ============================================================
 const MOD_INFO = {
   // --- ค่าเริ่มต้น (ขั้นที่ 1) ---
@@ -463,7 +473,7 @@ const MOD_INFO = {
   healPower:     { name: 'ผลการรักษาของยา',            en: { name: 'Healing effect' },            unit: '%', better: 'up',   area: 'heal' },
   foodPower:     { name: 'ค่าที่ได้จากเสบียงอาหาร',      en: { name: 'Food item value' },           unit: '%', better: 'up',   area: 'food' },
   discardStress: { name: 'ความเครียดทุกครั้งที่ทิ้งของ',  en: { name: 'Stress per discarded item' }, unit: '',  better: 'down', area: 'inventory' },
-  // --- เหตุการณ์ (ขั้นที่ 5) ---
+  // --- เหตุการณ์ (ใช้ในอีเวนต์ events.js) ---
   survivorLuck:  { name: 'โอกาสผู้รอดชีวิตเป็นมิตร',    en: { name: 'Friendly survivor chance' },  unit: '%', better: 'up',   area: 'social' },
   scamRisk:      { name: 'โอกาสถูกหลอก',              en: { name: 'Chance of being scammed' },   unit: '%', better: 'down', area: 'social' },
   emergencyFail: { name: 'โอกาสพลาดในเหตุฉุกเฉิน',     en: { name: 'Emergency failure chance' },  unit: '%', better: 'down', area: 'emergency' },
