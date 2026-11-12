@@ -6,6 +6,10 @@
   <title>100 วันรอดซอมบี้</title>
   <!-- ไอคอนแท็บ: game.js ใส่ไอคอนพิกเซลซอมบี้ให้ตอนเปิดเกม (ค่าว่างนี้กันเบราว์เซอร์ขอ favicon.ico แล้วขึ้น 404) -->
   <link id="favicon" rel="icon" href="data:,">
+  <!-- ฟอนต์พิกเซลสำหรับตัวเลข/อังกฤษ (ไม่มีอักษรไทย ภาษาไทยจึงใช้ฟอนต์ในเครื่องตามเดิม) ถ้าโหลดไม่ได้ก็ใช้ฟอนต์เดิมทั้งหมด -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -178,6 +182,8 @@
 
   <!-- แสงแดงกะพริบทั้งจอตอนเสียพลังชีวิต (เล่นด้วย class is-hit ใน game.js) -->
   <div id="hit-flash" class="hit-flash" aria-hidden="true"></div>
+  <!-- จอมืดตอนเปลี่ยนช่วงของวัน พร้อมชื่อช่วง แตะเพื่อข้าม (game.js สั่งเล่น) -->
+  <div id="phase-fade" class="phase-fade" aria-hidden="true" hidden><div id="phase-fade-title" class="phase-fade-title"></div><div id="phase-fade-skip" class="phase-fade-skip"></div></div>
 
   <!-- ข้อความสั้น ๆ ที่โผล่แล้วหายเอง เช่น "บันทึกแล้ว" -->
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

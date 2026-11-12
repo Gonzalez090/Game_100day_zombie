@@ -1439,6 +1439,78 @@ function renderStats() {
         </div>
       </li>`;
   }).join('');
+  showStatChanges();
+}
+
+// ---------- เอฟเฟกต์ (ขั้นที่ 7): ตัวเลขเด้งตอนค่าเปลี่ยน / จอมืดตอนเปลี่ยนช่วง ----------
+let lastStatsSnapshot = null; // { game, stats } ค่าสถานะตอนวาดแผงครั้งก่อน
+let lastPhaseKey = null;      // ช่วงของวันที่เล่นจอมืดไปแล้ว (วาดช่วงเดิมซ้ำ เช่น เปลี่ยนภาษา จะไม่เล่นอีก)
+const FLOAT_NUM_MS = 1100;
+const FLOAT_NUM_DELAY_MS = 1750; // ถ้าจอมืดกำลังเล่น รอให้เกือบสว่างก่อนค่อยเด้งตัวเลข
+const PHASE_FADE_MS = 2000;      // มืดลง 0.3 วิ → ค้างชื่อช่วง 1 วิ → สว่าง 0.7 วิ (ต้องตรงกับ .phase-fade ใน style.css)
+
+function prefersReducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function currentPhaseKey() {
+  return `${game.seed}:${game.day}:${game.phase}`;
+}
+
+// ตัวเลข +/− ลอยขึ้นข้างค่าที่เปลี่ยน (เทียบกับตอนวาดครั้งก่อนของเกมเดียวกัน เปิดเกม/โหลดเซฟไม่เด้ง)
+function showStatChanges() {
+  const previous = lastStatsSnapshot;
+  lastStatsSnapshot = { game, stats: { ...game.stats } };
+  if (!previous || previous.game !== game || prefersReducedMotion()) return;
+  const list = byId('stats-list');
+  const panel = list.closest('.panel-stats');
+  const delay = currentPhaseKey() !== lastPhaseKey ? FLOAT_NUM_DELAY_MS : 0;
+  Object.entries(CONFIG.stats).forEach(([key, def]) => {
+    const diff = game.stats[key] - previous.stats[key];
+    if (diff === 0) return;
+    const value = list.querySelector(`[data-stat="${key}"] .stat-value`);
+    const good = def.higherIsWorse ? diff < 0 : diff > 0;
+    const popup = document.createElement('span');
+    popup.className = `float-num ${good ? 'is-good' : 'is-bad'}`;
+    popup.textContent = formatSigned(diff);
+    popup.setAttribute('aria-hidden', 'true');
+    // วางชิดซ้ายของตัวเลข "ค่า / สูงสุด" (ตำแหน่งวัดจากแผงค่าสถานะ)
+    popup.style.top = `${value.offsetTop - 2}px`;
+    popup.style.right = `${panel.clientWidth - value.offsetLeft + 6}px`;
+    popup.style.animationDelay = `${delay}ms`;
+    panel.appendChild(popup);
+    setTimeout(() => popup.remove(), delay + FLOAT_NUM_MS + 1500); // เผื่อเวลาไว้ ถ้าแตะข้ามจอมืดแล้วตัวเลขเริ่มเด้งใหม่
+  });
+}
+
+// จอมืดพร้อมชื่อช่วงของวัน เล่นครั้งเดียวต่อช่วง (แตะจอเพื่อข้ามได้ ระหว่างนั้นกดปุ่มข้างใต้ไม่ได้)
+let phaseFadeTimer = null;
+function playPhaseFade(titleHtml) {
+  const key = currentPhaseKey();
+  if (key === lastPhaseKey) return;
+  lastPhaseKey = key;
+  if (prefersReducedMotion()) return;
+  const fade = byId('phase-fade');
+  byId('phase-fade-title').innerHTML = titleHtml;
+  byId('phase-fade-skip').textContent = t('phaseFadeSkip');
+  fade.hidden = true;
+  void fade.offsetWidth; // รีเซ็ตแอนิเมชันให้เล่นใหม่ได้
+  fade.hidden = false;
+  clearTimeout(phaseFadeTimer);
+  phaseFadeTimer = setTimeout(() => { fade.hidden = true; }, PHASE_FADE_MS + 50);
+}
+
+// แตะจอมืด: ปิดทันที และตัวเลขเด้งที่รออยู่เด้งเลยไม่ต้องรอ
+function skipPhaseFade() {
+  clearTimeout(phaseFadeTimer);
+  byId('phase-fade').hidden = true;
+  document.querySelectorAll('.float-num').forEach(popup => {
+    if (popup.style.animationDelay === '0ms') return;
+    popup.style.animation = 'none';
+    void popup.offsetWidth; // เริ่มแอนิเมชันใหม่ตั้งแต่ต้น
+    popup.style.animation = '';
+    popup.style.animationDelay = '0ms';
+  });
 }
 
 // ค่าสถานะถึงขั้นอันตรายไหม (ใช้ขึ้นสีเตือน)
@@ -1485,6 +1557,7 @@ const PHASE_VIEWS = {
 function renderPhase() {
   const view = PHASE_VIEWS[game.phase];
   byId('phase-title').innerHTML = iconLabel(view.icon, view.title(game.day));
+  playPhaseFade(`${iconHtml(view.icon, 3)}<span>${escapeHtml(view.title(game.day))}</span>`);
   // ตายตอนกลางวัน (ของเสี่ยงตอนเช้า / อีเวนต์ตอนบ่าย) ใช้ภาพตอนกลางวัน
   const diedInDaylight = ['morning', 'event'].includes(game.death?.phase);
   const scene = game.phase === 'dead' && diedInDaylight ? 'morning' : view.scene;
@@ -2808,6 +2881,8 @@ function leaveGame() {
   game = null;
   loadedSaveRev = null;
   lastSavedJson = null;
+  lastStatsSnapshot = null;
+  lastPhaseKey = null;
   goToTitle();
 }
 
@@ -3208,6 +3283,7 @@ function startMusicOnGesture(event) {
 // 11) ผูกปุ่ม แล้วเริ่มที่หน้าแรก
 // ------------------------------------------------------------
 function bindEvents() {
+  byId('phase-fade').addEventListener('click', skipPhaseFade);
   // หน้าแรก: ปุ่ม "เริ่มเกม" (ไม่มีเซฟ) และปุ่มในการ์ดเซฟ (สร้างใหม่ทุกครั้งที่วาด จึงดักที่กล่องแม่)
   byId('btn-start-game').addEventListener('click', startNewGame);
   byId('save-card').addEventListener('click', event => {

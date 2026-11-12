@@ -726,3 +726,130 @@ img.item-icon { width: 32px; height: 32px; image-rendering: pixelated; }
   .slot-actions { flex-direction: row; width: 100%; }
   .slot-actions .btn { flex: 1; }
 }
+
+/* ============================================================
+   ขั้นที่ 7: ตกแต่งสไตล์พิกเซล (ทับค่าด้านบน)
+   - ตัวเลข/อังกฤษเป็นฟอนต์พิกเซล DotGothic16 (Google Fonts) ภาษาไทยใช้ฟอนต์เดิมอัตโนมัติ
+     (เลือกตัวนี้เพราะตัวเลขขนาดเล็กอ่านชัด ฟอนต์พิกเซลบางตัว 5 กับ S ดูเหมือนกัน)
+     (เบราว์เซอร์เลือกฟอนต์ทีละตัวอักษร ฟอนต์พิกเซลไม่มีอักษรไทย จึงข้ามไปฟอนต์ถัดไป)
+   - กรอบมุมขั้นบันได (clip-path) + เงาด้านใน เพราะเงานอกกรอบจะถูกตัดทิ้ง
+   ============================================================ */
+/* ช่องว่างใช้ฟอนต์ในเครื่อง: ฟอนต์พิกเซลกว้างเท่ากันทุกตัว (ช่องว่าง 8px) ประโยคภาษาไทยจะห่างเกินไป */
+@font-face {
+  font-family: "UI Space";
+  src: local("Leelawadee UI"), local("LeelawadeeUI"), local("Leelawadee"), local("Thonburi"), local("Tahoma");
+  unicode-range: U+0020, U+00A0;
+}
+:root {
+  --font: "UI Space", "DotGothic16", "Leelawadee UI", "Leelawadee", "Thonburi", "Noto Sans Thai", Tahoma, sans-serif;
+  /* มุมขั้นบันได: กรอบใหญ่ตัดมุมขั้นละ 4px / ปุ่ม ชิป ป้าย ขั้นละ 2px */
+  --pixel-corners: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px));
+  --pixel-corners-sm: polygon(0 2px, 2px 2px, 2px 0, calc(100% - 2px) 0, calc(100% - 2px) 2px, 100% 2px,
+    100% calc(100% - 2px), calc(100% - 2px) calc(100% - 2px), calc(100% - 2px) 100%, 2px 100%, 2px calc(100% - 2px), 0 calc(100% - 2px));
+  /* ลายจุด dither 4x4 (จุดดำจาง ๆ / จุดขาวจาง ๆ) */
+  --dither-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23000' fill-opacity='.38'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23000' fill-opacity='.38'/%3E%3C/svg%3E");
+  --dither-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Crect width='1' height='1' fill='%23fff' fill-opacity='.035'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23fff' fill-opacity='.035'/%3E%3C/svg%3E");
+}
+
+/* พื้นหลังลายจุดพิกเซล */
+body {
+  background-color: var(--bg);
+  background-image: var(--dither-dark), radial-gradient(ellipse at 50% 0%, #2b2119 0%, var(--bg) 70%);
+  background-attachment: scroll, fixed;
+}
+.panel, .reveal-card, .end-card, .modal-box, .slot { background-image: var(--dither-light); }
+
+/* กรอบใหญ่: มุมขั้นบันได กรอบหนา เงาด้านใน */
+.panel, .reveal-card, .end-card, .slot, .modal-box, .item-card, .event-choice, .info-block, .trait-card,
+.night-threat, .night-report, .event-result, .death-box, .end-best, .scene-frame, .sprite-frame,
+.intro-note, .day-log, .end-epilogue {
+  clip-path: var(--pixel-corners);
+}
+.panel, .reveal-card, .end-card, .slot, .modal-box {
+  border-width: 3px;
+  box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.35), inset 0 3px 0 rgba(255, 255, 255, 0.04);
+}
+.item-card, .event-choice { box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.35); }
+.sprite-frame { box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.25); }
+
+/* ชิป ป้าย และกล่องเล็ก: มุมขั้นเล็ก */
+.chip, .trait-tag, .event-type, .end-new-best, .end-final, .scene-badge, .start-stat, .toast {
+  clip-path: var(--pixel-corners-sm);
+}
+
+/* ปุ่มนูน 2 โทน: กดแล้วยุบลง (เส้นโฟกัสวาดด้านในปุ่ม เพราะด้านนอกถูกตัดมุม) */
+.btn, .sound-toggle, .language-switch { clip-path: var(--pixel-corners-sm); }
+.btn {
+  border-width: 2px;
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.18);
+}
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.45); }
+.btn:disabled { box-shadow: none; }
+.sound-toggle, .language-switch { box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.4); }
+.btn:focus-visible, .lang-btn:focus-visible, .sound-toggle:focus-visible, .event-choice:focus-visible {
+  outline: 2px solid #fff3e0;
+  outline-offset: -6px;
+}
+
+/* หลอดค่าสถานะเป็นช่อง ๆ แบบเกมพิกเซล */
+.stat .stat-bar { height: 14px; } /* หลอดในแผงค่าสถานะ (หลอดหน้าสรุปสูง 16px ตามเดิม) */
+.stat-fill {
+  background: repeating-linear-gradient(90deg, var(--stat-color) 0 6px, color-mix(in srgb, var(--stat-color) 55%, #000) 6px 8px);
+}
+
+/* เปลี่ยนช่วงของวัน: ค่อย ๆ มืด 0.3 วิ → ค้างชื่อช่วง 1 วิ → ค่อย ๆ สว่าง 0.7 วิ (รวม 2 วิ = PHASE_FADE_MS ใน game.js)
+   ระหว่างนี้บังการคลิกไว้ กันกดโดนปุ่มที่มองไม่เห็น แตะจอเพื่อข้ามได้ */
+.phase-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background-color: #050403;
+  background-image: var(--dither-dark);
+  cursor: pointer;
+  animation: phase-fade 2s linear forwards;
+}
+.phase-fade-skip { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.04em; }
+.phase-fade-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  font-weight: 700;
+  color: #f3e9d8;
+  text-shadow: 3px 3px 0 #000;
+}
+@keyframes phase-fade {
+  0% { opacity: 0; }
+  15%, 65% { opacity: 1; }   /* 0.3 วิ ถึง 1.3 วิ: มืดสนิท อ่านชื่อช่วง */
+  100% { opacity: 0; visibility: hidden; }
+}
+
+/* ตัวเลขเด้งข้างหลอดค่าสถานะตอนค่าเปลี่ยน เช่น −15 (แดง) +25 (เขียว) */
+.panel-stats { position: relative; }
+.float-num {
+  position: absolute;
+  right: 20px;
+  z-index: 2;
+  font-size: 1.1rem;
+  font-weight: 700;
+  pointer-events: none;
+  text-shadow: 2px 2px 0 #000;
+  animation: float-up 1.1s ease-out both; /* both: ระหว่างรอ (delay) ยังซ่อนอยู่ */
+}
+.float-num.is-good { color: var(--good); }
+.float-num.is-bad { color: var(--bad); }
+@keyframes float-up {
+  0% { transform: translateY(6px); opacity: 0; }
+  15% { transform: translateY(0); opacity: 1; }
+  60% { opacity: 1; }
+  100% { transform: translateY(-26px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phase-fade, .float-num { display: none; }
+}
