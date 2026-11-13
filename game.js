@@ -769,7 +769,7 @@ function getStage(day) {
 
 // รวมเลขสุ่มประจำเกม + วัน + ชนิดของสิ่งที่จะสุ่ม เป็นเลขตั้งต้นเดียว
 // (แต่ละเกมได้ภาพ/อากาศไม่ซ้ำกัน แต่ในเกมเดียวกันวันเดิมได้ผลเดิมเสมอ)
-const SEED_SALT = { weather: 1, city: 2, sky: 3, clouds: 4, rain: 5, morningZombies: 6, nightZombies: 7, zombieCount: 8 };
+const SEED_SALT = { weather: 1, city: 2, sky: 3, clouds: 4, rain: 5, morningZombies: 6, nightZombies: 7, zombieCount: 8, event: 9 };
 
 function mixSeed(runSeed, day, salt) {
   let value = (runSeed ^ Math.imul(day, 0x9e3779b1) ^ Math.imul(salt, 0x85ebca6b)) >>> 0;
@@ -1312,7 +1312,9 @@ function updateSceneHero(model) {
   hero.palette = buildHeroPalette(game.character);
   hero.gear = getHeroGear();
   hero.hurt = game.stats.hp <= (game.stats.maxHp * CONFIG.sceneMood.hurtBelowPercent) / 100;
-  const mode = getHeroMode();
+  // ช่วงอีเวนต์: ตัวละครอยู่ในฉากของอีเวนต์ (วาดใน event-scenes.js)
+  const mode = model.eventScene && game.phase === 'event' ? 'event' : getHeroMode();
+  updateEventScene(model);
   if (mode === hero.mode) return;
   hero.mode = mode;
   if (mode === 'walk') { // เดินออกมาจากประตูที่พัก
@@ -1374,7 +1376,7 @@ function stepHero(model) {
 // ตัวละครข้างนอก (เดิน/ยืนโบกมือ) — ตอนอยู่ที่หน้าต่างและตอนล้มลงมีฟังก์ชันของตัวเอง
 function drawHero(ctx, model) {
   const hero = model.hero;
-  if (!hero.palette || hero.mode === 'window') return;
+  if (!hero.palette || hero.mode === 'window' || hero.mode === 'event') return;
   if (hero.mode === 'dead') {
     drawHeroLying(ctx, hero);
     return;
@@ -1405,12 +1407,17 @@ function drawHeroInWindow(ctx, model) {
   ctx.restore();
 }
 
+// หมุนภาพ 90 องศาให้นอนราบ (หัวไปทางซ้าย) ตัดแถวว่างทิ้ง
+function layDown(rows) {
+  const width = rows[0].length;
+  return Array.from({ length: width }, (_, row) =>
+    Array.from({ length: rows.length }, (_, col) => rows[col][width - 1 - row]))
+    .filter(row => row.some(cell => cell !== '.'));
+}
+
 // เสียชีวิต: ภาพตัวละครหมุน 90 องศา (หัวไปทางซ้าย หน้าหงาย) นอนอยู่บนแอ่งเลือด
 function drawHeroLying(ctx, hero) {
-  const grid = composeHero(hero.look, hero.gear, 'stand', { hideBelt: true });
-  const rows = Array.from({ length: HERO_DRAWN_WIDTH }, (_, row) =>
-    Array.from({ length: HERO_DRAWN_HEIGHT }, (_, col) => grid[col][HERO_DRAWN_WIDTH - 1 - row]))
-    .filter(row => row.some(cell => cell !== '.'));
+  const rows = layDown(composeHero(hero.look, hero.gear, 'stand', { hideBelt: true }));
   const left = Math.round(hero.lying.x) - Math.floor(HERO_DRAWN_HEIGHT / 2);
   fillPixels(ctx, 'rgba(110, 10, 12, 0.75)', left + 3, hero.lying.y - 1, HERO_DRAWN_HEIGHT - 4, 2);
   drawMiniSprite(ctx, rows, hero.palette, left, hero.lying.y - rows.length + 1, false);
@@ -1616,6 +1623,7 @@ function makeSceneZombies(random, colors, stage, baseCount, bonusPercent) {
 // state: walk = เดิน / idle = ยืนนิ่ง / look = หันมามองจอ / bang = ทุบประตูหรือรุมตัวละคร
 // target = จุดที่กำลังเดินไปรุม (กลางคืน: หน้าประตูที่พัก / ตอนตัวละครล้มลง: รอบตัวละคร)
 function stepZombie(zombie) {
+  if (zombie.down) return; // ล้มลงแล้ว (อีเวนต์ซอมบี้กลางวัน)
   if (zombie.target != null) {
     const distance = zombie.target - zombie.x;
     if (Math.abs(distance) > 1) {
@@ -1629,7 +1637,12 @@ function stepZombie(zombie) {
     return;
   }
   zombie.timer--;
-  if (zombie.state === 'walk') zombie.x = wrapSceneX(zombie.x + zombie.dir * zombie.speed, zombie.width);
+  if (zombie.state === 'walk') {
+    const next = zombie.x + zombie.dir * zombie.speed;
+    if (!zombie.range) zombie.x = wrapSceneX(next, zombie.width);
+    else if (next < zombie.range[0] || next > zombie.range[1]) zombie.dir *= -1; // ฉากอีเวนต์: เดินอยู่แค่ในช่วงของตัวเอง
+    else zombie.x = next;
+  }
   if (zombie.timer > 0) return;
   if (zombie.state === 'walk') {
     zombie.state = 'idle';
@@ -1647,6 +1660,13 @@ const ZOMBIE_STEP_FRAMES = { runner: 1, bloater: 4, boss: 4 };
 function drawSceneZombies(ctx, zombies, frame) {
   zombies.forEach(zombie => {
     const sprite = ZOMBIE_DRAW[zombie.kind];
+    if (zombie.down) { // ล้มนอนอยู่บนแอ่งเลือด
+      sprite.lying ??= layDown(sprite.walk[0]);
+      const left = Math.round(zombie.x);
+      fillPixels(ctx, 'rgba(110, 10, 12, 0.7)', left + 3, zombie.feetY - 1, sprite.lying[0].length - 6, 2);
+      drawMiniSprite(ctx, sprite.lying, zombie.palette, left, zombie.feetY - sprite.lying.length + 1, zombie.dir < 0);
+      return;
+    }
     const cycle = every => Math.floor((frame + zombie.phase) / every) % 2;
     let rows = sprite.walk[0];
     if (zombie.scream) rows = sprite.walk[cycle(2)]; // ร้องสลับ 2 ท่า
@@ -1862,6 +1882,7 @@ function stepScene(model) {
   stepLamp(model.lamp);
   model.zombies.forEach(stepZombie);
   stepHero(model);
+  stepEventScene(model);
   model.rain.forEach(stepRain);
   runSceneEvents(model);
   model.flashAlpha = model.flash.shift() ?? 0;
@@ -1885,17 +1906,23 @@ function drawSceneFrame(ctx, model) {
   model.smokes.forEach(points => drawSmoke(ctx, colors, points, frame));
   ctx.drawImage(layers.street, 0, 0);
   drawWindowFlickers(ctx, colors, model.windows.shop);
+  if (model.eventScene) drawEventBack(ctx, model); // ร้าน/ไฟไหม้/หลังคาของอีเวนต์ วาดทับตึกแถว
   drawHeroInWindow(ctx, model);
   drawShelterDefenses(ctx, model.shelter, model.hero.gear);
-  drawLampLight(ctx, colors, model.lamp);
+  if (!model.lamp.hidden) drawLampLight(ctx, colors, model.lamp);
   if (model.hero.mode === 'window' && model.hero.gear.flashlight) drawFlashlightBeam(ctx, model.shelter, model.hero.dir);
-  // ตัวละครแทรกอยู่ระหว่างซอมบี้ตามระยะใกล้-ไกล (ตัวที่ยืนต่ำกว่าวาดทับ)
-  const heroFeetY = model.hero.mode === 'dead' ? model.hero.lying.y : HERO_FEET_Y;
-  drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY <= heroFeetY), frame);
-  drawHero(ctx, model);
-  drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY > heroFeetY), frame);
+  if (model.eventScene) {
+    drawEventActors(ctx, model); // ตัวละคร คนในอีเวนต์ ซอมบี้ ของบนพื้น เรียงตามระยะใกล้-ไกล
+  } else {
+    // ตัวละครแทรกอยู่ระหว่างซอมบี้ตามระยะใกล้-ไกล (ตัวที่ยืนต่ำกว่าวาดทับ)
+    const heroFeetY = model.hero.mode === 'dead' ? model.hero.lying.y : HERO_FEET_Y;
+    drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY <= heroFeetY), frame);
+    drawHero(ctx, model);
+    drawSceneZombies(ctx, model.zombies.filter(zombie => zombie.feetY > heroFeetY), frame);
+  }
   drawHelicopter(ctx, model);
   drawWeatherFront(ctx, model);
+  if (model.eventScene) drawEventFront(ctx, model); // ฟองอารมณ์/คลื่นวิทยุ อยู่หน้าสายฝน
   if (model.flashAlpha > 0) fillPixels(ctx, `rgba(225, 228, 255, ${model.flashAlpha})`, 0, 0, SCENE_WIDTH, SCENE_HEIGHT);
 }
 
@@ -1904,11 +1931,13 @@ const sceneView = { key: null, model: null, running: false, lastTime: 0 };
 
 function showAnimatedScene(canvas, phase, day, runSeed) {
   const threatId = phase === 'night' ? game.night?.threatId ?? null : null;
-  const key = `${phase}:${day}:${runSeed}:${threatId}`;
+  const eventId = game.phase === 'event' ? game.event?.id ?? null : null; // บ่ายที่มีอีเวนต์: ฉากของอีเวนต์ (event-scenes.js)
+  const key = `${phase}:${day}:${runSeed}:${threatId}:${eventId}`;
   const rebuilt = sceneView.key !== key;
   if (rebuilt) {
     sceneView.key = key;
     sceneView.model = buildScene(phase, day, runSeed, threatId);
+    if (eventId) setupEventScene(sceneView.model, eventId, runSeed, day);
     canvas.width = SCENE_WIDTH;
     canvas.height = SCENE_HEIGHT;
   }
@@ -1958,7 +1987,10 @@ function renderScene(phase, day, runSeed) {
   const image = byId('phase-scene-image');
   const imagePath = CONFIG.sceneImages[phase];
   const weather = getWeather(day, runSeed);
-  const label = `${t(SCENE_LABEL_KEYS[phase])} (${tr(weather, 'name')})`;
+  const event = game.phase === 'event' && game.event ? getEvent(game.event.id) : null;
+  const label = event
+    ? t('sceneEvent', tr(event, 'name'), tr(weather, 'name'))
+    : `${t(SCENE_LABEL_KEYS[phase])} (${tr(weather, 'name')})`;
   byId('scene-weather').innerHTML = iconLabel(weather.icon, tr(weather, 'name'));
   for (const [className, active] of Object.entries(getSceneMoodClasses())) {
     canvas.parentElement.classList.toggle(className, active);
@@ -3922,6 +3954,19 @@ function validateConfig() {
   });
   [['SCENE_CAR', SCENE_CAR], ['SCENE_CONE', SCENE_CONE]]
     .forEach(([owner, rows]) => checkPixelRows(owner, rows, rows[0].length));
+  // ภาพอีเวนต์: ทุกอีเวนต์ต้องมีฉากใน event-scenes.js / ท่าทางและของในมือกว้างเท่าตัวละคร / ของบนพื้นต้องมีชุดสี
+  EVENTS.forEach(event => {
+    if (!EVENT_SCENES[event.id]) errors.push(`event-scenes.js: อีเวนต์ "${event.id}" ยังไม่มีฉากใน EVENT_SCENES`);
+  });
+  Object.entries({ ...EVENT_POSES, ...EVENT_HELD_ITEMS, EVENT_BIG_PACK, EVENT_MASK, EVENT_LEG_WOUND, EVENT_LEG_BANDAGE })
+    .forEach(([owner, part]) => checkPixelRows(owner, part.rows));
+  checkPixelRows('EVENT_SIT_LEGS', EVENT_SIT_LEGS);
+  Object.entries(EVENT_EMOTES).forEach(([id, rows]) => checkPixelRows(`EVENT_EMOTES.${id}`, rows, 5));
+  Object.entries(EVENT_PROPS).forEach(([id, rows]) => {
+    checkPixelRows(`EVENT_PROPS.${id}`, rows, rows[0].length);
+    if (!EVENT_PROP_PALETTES[id]) errors.push(`event-scenes.js: ของ "${id}" ยังไม่มีชุดสีใน EVENT_PROP_PALETTES`);
+  });
+  checkPixelRows('EVENT_FAMILY_PHOTO', EVENT_FAMILY_PHOTO, EVENT_FAMILY_PHOTO[0].length);
 
   // ของใน items.js
   ITEMS.forEach(item => {

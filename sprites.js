@@ -574,3 +574,239 @@ const SCENE_CONE = [
   'OOO',
   'KKK',
 ];
+
+// ------------------------------------------------------------
+// ภาพประกอบอีเวนต์ (วาดใน event-scenes.js)
+//   คนที่โผล่ในอีเวนต์ใช้ภาพตัวละครชุดเดียวกับผู้เล่น (HERO_*) แล้ววาดท่าทาง/ของในมือทับ
+//   ทุกส่วนกว้าง 14 จุดเท่าตัวละคร: '.' = ไม่เปลี่ยน, '_' = ลบจุดเดิม
+//   สีเพิ่ม (EVENT_PROP_COLORS ใน event-scenes.js): 0 เลือด, 1 ปกสมุด, 2 กระดาษ, 3 กรอบรูปไม้,
+//   4 รูปถ่าย, 5 คนในรูป, 6 ตัววิทยุ, 7 ลำโพง, 8 หน้าปัด, 9 เสาอากาศ, q ผ้าปิดหน้า
+// ------------------------------------------------------------
+const EVENT_POSES = {
+  // สองมือถือของไว้ที่อก (ของอยู่คอลัมน์ 4-9 แถว 13-16 ดู EVENT_HELD_ITEMS)
+  hold: { top: 14, rows: [
+    '._SS......SS_.',
+    '.__S......S__.',
+    '.__........__.',
+  ] },
+  // ยกวิทยุสื่อสารแนบหูขวา
+  phone: { top: 4, rows: [
+    '.............9',
+    '.............9',
+    '............66',
+    '............67',
+    '............66',
+    '...........S66',
+    '............SS',
+    '.............t',
+    '.............t',
+    '...........__.',
+    '...........__.',
+    '...........__.',
+    '...........__.',
+  ] },
+  // ชูสองแขน
+  armsUp: { top: 7, rows: [
+    'S............S',
+    'S............S',
+    't............t',
+    't............t',
+    '..............',
+    '..............',
+    '.__........__.',
+    '.__........__.',
+    '.__........__.',
+    '.__........__.',
+  ] },
+};
+
+// นั่งกับพื้นเหยียดขามาข้างหน้า: ใช้แทนขาแถว 18-21 (ภาพเตี้ยลงเหลือ 20 แถว)
+const EVENT_SIT_LEGS = [
+  '.PPPPP..PPPPP.',
+  '.FFFF....FFFF.',
+];
+
+// เป้ใบใหญ่มีม้วนผ้าห่มด้านบน (วาดไว้หลังตัว: เติมเฉพาะจุดที่ยังว่าง)
+const EVENT_BIG_PACK = { top: 5, rows: [
+  'dddddddddddddd',
+  'dwdwdwdwdwdwdw',
+  'BBBBBBBBBBBBBB',
+  'BBBBBBBBBBBBBB',
+  'BBBBBBBBBBBBBB',
+  'BBBBBBBBBBBBBB',
+  'BBBBBBBBBBBBBB',
+  'BBBBBBBBBBBBBB',
+  'bBBBBBBBBBBBBb',
+  'bBBBBBBBBBBBBb',
+  'bBBBBBBBBBBBBb',
+  '.bbbbbbbbbbbb.',
+] };
+
+// ผ้าโพกปิดจมูกถึงคาง ชายผ้าเป็นมุมแหลมห้อยลงใต้คาง (โจร)
+const EVENT_MASK = { top: 8, rows: [
+  '..qqqqqqqqqq..',
+  '...qqqQqqqq...',
+  '....qqQqqq....',
+  '......qq......',
+] };
+
+// แผลที่ขาซ้ายตอนนั่ง / ผ้าพันแผลที่พันแล้ว
+const EVENT_LEG_WOUND = { top: 18, rows: ['..00..........'] };
+const EVENT_LEG_BANDAGE = { top: 18, rows: ['..WWW.........'] };
+
+// ของที่ถือไว้ที่อก (ใช้คู่กับท่า hold)
+const EVENT_HELD_ITEMS = {
+  book: { top: 13, rows: [
+    '....111111....',
+    '....122221....',
+    '....122221....',
+    '....111111....',
+  ] },
+  photo: { top: 13, rows: [
+    '....333333....',
+    '....345543....',
+    '....344443....',
+    '....333333....',
+  ] },
+  radio: { top: 11, rows: [
+    '.........9....',
+    '.........9....',
+    '....666666....',
+    '....677686....',
+    '....677666....',
+    '....666666....',
+  ] },
+  firstAid: { top: 13, rows: [
+    '....WWrrWW....',
+    '....WrrrrW....',
+    '....WWrrWW....',
+    '....WWWWWW....',
+  ] },
+};
+
+// สัญลักษณ์ในฟองคำพูดเหนือหัว 5x5 (r แดง, b น้ำเงิน, k ดำ, p ชมพู)
+const EVENT_EMOTES = {
+  alert:    ['..r..', '..r..', '..r..', '.....', '..r..'],
+  question: ['.bbb.', '....b', '..bb.', '.....', '..b..'],
+  dots:     ['.....', '.....', 'k.k.k', '.....', '.....'],
+  heart:    ['.....', 'pp.pp', 'ppppp', '.ppp.', '..p..'],
+  note:     ['..bb.', '..b.b', '..b..', 'bbb..', 'bb...'],
+  sweat:    ['...b.', '..bb.', '.bbbb', '.bbbb', '..bb.'],
+  sleep:    ['kkkk.', '...k.', '..k..', '.k...', 'kkkk.'],
+  anger:    ['.r.r.', 'rr.rr', '.....', 'rr.rr', '.r.r.'],
+};
+
+// ของประกอบฉากที่วางบนพื้น (game.js ใส่เส้นขอบดำให้อัตโนมัติ) สีอยู่ใน EVENT_PROP_PALETTES (event-scenes.js)
+const EVENT_PROPS = {
+  // ถังรองน้ำ: R ขอบถัง, i ข้างในถัง (ค่อย ๆ เปลี่ยนเป็นสีน้ำ), B ตัวถัง, b ตัวถังสว่าง
+  bucket: [
+    '.RRRRRR.',
+    'RiiiiiiR',
+    '.BBBBBB.',
+    '.BbBBBB.',
+    '.BbBBBB.',
+    '..BBBB..',
+  ],
+  // ประตูห้องใต้ดินคล้องโซ่: d ขอบไม้, D บานไม้, M โซ่/หูจับ, y แม่กุญแจ, s ฐานปูน
+  cellar: [
+    '..dddddddddddddddddd..',
+    '.dDDDDDMDDddDDMDDDDDd.',
+    '.dDDDDDMDDddDDMDDDDDd.',
+    'dDDDDDDMMMyyMMMDDDDDDd',
+    'dDDDDDDDDDyyDDDDDDDDDd',
+    'dDDDDDDDDDddDDDDDDDDDd',
+    'ssssssssssssssssssssss',
+  ],
+  // เปิดแล้ว: บานไม้พับลงสองข้าง เห็นขั้นบันไดมืด ๆ (k ช่องมืด, x ขั้นบันได)
+  cellarOpen: [
+    'dd..................dd',
+    'dDd.kkkkkkkkkkkkkk.dDd',
+    'dDdkkkkkkkkkkkkkkkkdDd',
+    'dDdkxxxxxxxxxxxxxxkdDd',
+    'dDdkkkkkkkkkkkkkkkkdDd',
+    'dDdkkxxxxxxxxxxxxkkdDd',
+    'ssssssssssssssssssssss',
+  ],
+  // ลังไม้: D แผ่นไม้, d ร่องไม้, w ไม้คาดเฉียง
+  crate: [
+    'DDDDDDDDDD',
+    'dddddddddd',
+    'DDwDDDDwDD',
+    'DDDwDDwDDD',
+    'DDDDwwDDDD',
+    'DDDwDDwDDD',
+    'dddddddddd',
+    'DDDDDDDDDD',
+  ],
+  // ตู้กดน้ำ: R ตัวตู้, r ขาตู้, L ป้ายไฟ, g กระจก, a/b/c กระป๋อง, p แผงปุ่ม, y ปุ่ม, k ช่องหยอดเหรียญ/ช่องรับของ
+  vending: [
+    'RRRRRRRRRRRRRR',
+    'RLLLLLLLLLLLLR',
+    'RRRRRRRRRRRRRR',
+    'RggggggggRpppR',
+    'RgabcabcgRpypR',
+    'RgabcabcgRpppR',
+    'RggggggggRpypR',
+    'RgcabcabgRpppR',
+    'RgcabcabgRpypR',
+    'RggggggggRpppR',
+    'RgbcabcagRpppR',
+    'RgbcabcagRpkpR',
+    'RggggggggRpppR',
+    'RggggggggRpppR',
+    'RRRRRRRRRRRRRR',
+    'RRRRRRRRRRRRRR',
+    'RRkkkkkkkkkkRR',
+    'RRkkkkkkkkkkRR',
+    'RRRRRRRRRRRRRR',
+    'rRRRRRRRRRRRRr',
+    'rr..........rr',
+  ],
+  // ตู้กดน้ำที่กระจกแตกแล้ว (x รอยร้าว) กระป๋องหายไปหลายช่อง
+  vendingBroken: [
+    'RRRRRRRRRRRRRR',
+    'RLLLLLLLLLLLLR',
+    'RRRRRRRRRRRRRR',
+    'RggxgggggRpppR',
+    'RgaxggbcgRpypR',
+    'RggxxggcgRpppR',
+    'RgggxxgggRpypR',
+    'RgcggxxbgRpppR',
+    'RggagggxgRpypR',
+    'RggggggxgRpppR',
+    'RgbggggxgRpppR',
+    'RgggcaxggRpkpR',
+    'RggggxgggRpppR',
+    'RggggggggRpppR',
+    'RRRRRRRRRRRRRR',
+    'RRRRRRRRRRRRRR',
+    'RRkkkkkkkkkkRR',
+    'RRkkkkkkkkkkRR',
+    'RRRRRRRRRRRRRR',
+    'rRRRRRRRRRRRRr',
+    'rr..........rr',
+  ],
+  // รองเท้าข้างเดียว (S หนัง, s พื้นรองเท้า)
+  shoe: [
+    'SS...',
+    'SSSSS',
+    'sssss',
+  ],
+};
+
+// รูปครอบครัวในกรอบ (ภาพขยายในฟองความคิด): พ่อ ลูก แม่ ยิ้มแย้ม
+//   '.' พื้นรูป, H ผมพ่อ, h ผมแม่, k ผมลูก, S ผิว, E ตา, m ปาก, T เสื้อพ่อ, t เสื้อแม่, c เสื้อลูก
+const EVENT_FAMILY_PHOTO = [
+  '........................',
+  '..HHHHH...........hhhh..',
+  '.HHHHHHH.........hhhhhh.',
+  '.HSSSSSH.........hSSSSh.',
+  '.SESSSES..kkkk...hESSEh.',
+  '.SSSmSSS.kkkkkk..hSmmSh.',
+  '..SSSSS..kSSSSk..hSSSSh.',
+  '.TTTTTTT.SESSES.tttttttt',
+  'TTTTTTTT.SSmmSS.tttttttt',
+  'TTTTTTTT.cccccc.tttttttt',
+  'TTTTTTTTcccccccctttttttt',
+  'TTTTTTTTcccccccctttttttt',
+];
